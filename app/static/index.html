@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spotify Swipe — Playlist Maker & Visualizer</title>
+  <link rel="icon" type="image/x-icon" href="assets/icon.ico">
+  <link rel="shortcut icon" href="assets/icon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Custom Frameless Desktop Titlebar -->
+  <div class="window-titlebar pywebview-drag-region">
+    <div class="titlebar-left">
+      <img src="assets/icon.ico" class="titlebar-icon" alt="Logo">
+      <span class="titlebar-brand">Spotify<span>Swipe</span></span>
+      <span class="titlebar-sub">playlist maker & visualizer</span>
+    </div>
+
+    <div class="titlebar-center">
+      <div class="titlebar-status-pill" id="titlebar-status-pill">
+        <span class="status-dot ready" id="status-dot"></span>
+        <span id="titlebar-status-text">Connected</span>
+      </div>
+      <span class="titlebar-perma-tag">powered by PERMA.wtf</span>
+    </div>
+
+    <div class="titlebar-controls no-drag">
+      <button class="win-btn win-min" onclick="window.minimizeWindow()" title="Minimize">
+        <svg viewBox="0 0 12 12" width="10" height="10"><rect y="5" width="12" height="2" fill="currentColor"/></svg>
+      </button>
+      <button class="win-btn win-max" onclick="window.toggleMaximizeWindow()" title="Maximize / Restore">
+        <svg viewBox="0 0 12 12" width="10" height="10"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+      <button class="win-btn win-close" onclick="window.closeWindow()" title="Close">
+        <svg viewBox="0 0 12 12" width="10" height="10"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Dynamic Chameleon Liquid Mesh Background -->
+  <div class="liquid-bg">
+    <div class="orb orb-primary"></div>
+    <div class="orb orb-secondary"></div>
+    <div class="orb orb-mono-1"></div>
+    <div class="orb orb-mono-2"></div>
+    <div class="glass-grid-overlay"></div>
+  </div>
+
+  <!-- Background Reactive Audio Visualizer Canvas -->
+  <canvas id="viz-canvas"></canvas>
+
+  <!-- Main Application Container -->
+  <div class="app-container">
+
+    <!-- Top Navigation Header -->
+    <header class="glass-header">
+      <div class="header-brand">
+        <div class="brand-icon-box">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+        </div>
+        <div class="brand-titles">
+          <h1>Spotify<span>Swipe</span></h1>
+        </div>
+      </div>
+
+      <!-- Center Controls: Active Playlist, Visualizer & Spotify Connect -->
+      <div class="header-center">
+        <!-- Active Playlist Pill -->
+        <button class="active-playlist-pill" id="nav-playlist-pill" title="Click to view playlist songs & remove duplicates">
+          <span class="playlist-icon">🎧</span>
+          <span id="active-playlist-pill-name">My Spotify Playlist</span>
+          <span class="count-badge" id="playlist-count-badge">0</span>
+        </button>
+
+        <!-- Visualizer Mode Selector (10 Dynamic Modes) -->
+        <div class="viz-selector-container" title="Select Visualizer Style (10 Dynamic Modes)">
+          <span class="viz-icon">✨</span>
+          <select id="viz-mode-select" class="glass-select-compact">
+            <option value="halo">Spotlight Halo</option>
+            <option value="bars">Cyber EQ</option>
+            <option value="wave">Liquid Wave</option>
+            <option value="starfield">Cosmic Starfield</option>
+            <option value="plasma">Plasma Orb</option>
+            <option value="matrix">Cyber Rain</option>
+            <option value="galaxy">Cosmic Galaxy</option>
+            <option value="ribbon">Chroma Ribbon</option>
+            <option value="prism">Audio Prism</option>
+            <option value="retrogrid">Synthwave Grid</option>
+          </select>
+        </div>
+
+        <!-- Master Volume Control Pill -->
+        <div class="master-volume-pill" title="Preview Audio Volume">
+          <button class="vol-btn" id="btn-master-mute" onclick="App.toggleMute(event)" title="Mute / Unmute Preview Audio">
+            <span id="master-vol-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            </span>
+          </button>
+          <input type="range" class="master-vol-range" id="master-vol-slider" min="0" max="100" value="85" oninput="App.onVolumeChange(this.value, event)" title="Preview Volume Slider">
+          <span class="master-vol-text" id="master-vol-text">85%</span>
+        </div>
+      </div>
+
+      <!-- Header Actions -->
+      <div class="header-actions">
+        <!-- Spotify Connect Desktop Device Pill -->
+        <div class="spotify-device-pill" id="spotify-device-pill" title="Spotify Playback Connection (Click to Refresh / Connect)" onclick="App.openSpotifyDesktopApp(event)">
+          <span class="device-dot"></span>
+          <span id="spotify-device-name">Spotify Ready</span>
+        </div>
+
+        <button class="glass-btn" id="btn-swap-playlist" title="Quickly switch to another Spotify playlist">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4"/></svg>
+          <span>Swap</span>
+        </button>
+
+        <button class="glass-btn" id="btn-new-playlist" title="Create a new playlist on Spotify">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" fill="none"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>New</span>
+        </button>
+
+        <button class="glass-btn" id="btn-open-settings" title="Settings: Album Cover Style, Visuals & Audio">
+          <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+
+        <a href="/auth/login" class="glass-btn" id="btn-login-spotify" title="Spotify Profile — Click to open Spotify App & Playlist" onclick="App.onProfileClick(event)">
+          <img id="auth-btn-avatar" src="" alt="" class="user-avatar-mini" style="display: none;">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+          <span id="auth-btn-text">Connect Spotify</span>
+        </a>
+      </div>
+    </header>
+
+    <!-- Main Swiping Viewport: Cleanly Centered -->
+    <main class="swipe-viewport">
+
+      <!-- 3D Swipe Card Stack -->
+      <div class="card-stack-container">
+        <!-- Loading State -->
+        <div class="deck-loading-overlay" id="deck-loading" style="display: none;">
+          <div class="loading-spinner"></div>
+          <span>Loading next songs...</span>
+        </div>
+
+        <!-- Rendered Card Deck -->
+        <div id="card-stack" class="card-stack-inner"></div>
+      </div>
+
+      <!-- Action Controls Bar (Positioned Cleanly Underneath Card) -->
+      <div class="swipe-controls-bar">
+        <!-- Undo Button -->
+        <button class="action-circle-btn btn-undo disabled" id="btn-undo" title="Undo last swipe (Z)">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.2" fill="none"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+        </button>
+
+        <!-- Pass / Skip Button (Left) -->
+        <button class="action-circle-btn btn-nope" id="btn-swipe-nope" title="Pass / Skip Song (Left Arrow / A)">
+          <svg viewBox="0 0 24 24" width="26" height="26" stroke="currentColor" stroke-width="2.5" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+
+        <!-- In-App Preview Play / Pause -->
+        <button class="action-circle-btn btn-audio" id="btn-toggle-audio" title="Play / Pause Audio Preview (Spacebar)">
+          <span id="main-play-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </span>
+        </button>
+
+        <!-- Like / Add to Spotify Playlist Button (Right) -->
+        <button class="action-circle-btn btn-like" id="btn-swipe-like" title="Like & Add to Spotify Playlist (Right Arrow / D)">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        </button>
+
+        <!-- Stream to Spotify Desktop App Button -->
+        <button class="action-circle-btn btn-spotify-stream" id="btn-play-spotify-app" title="Play Full Track on Spotify Desktop App">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+        </button>
+      </div>
+
+      <!-- Keyboard Shortcuts Hint -->
+      <div class="keyboard-hints">
+        <span><span class="kbd">←</span> Pass</span>
+        <span><span class="kbd">→</span> Like & Add to Spotify</span>
+        <span><span class="kbd">Space</span> Preview</span>
+        <span><span class="kbd">Z</span> Undo</span>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Slide-Over Live Playlist Drawer -->
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="playlist-drawer" id="playlist-drawer">
+    <div class="drawer-header">
+      <div style="flex: 1;">
+        <h3 id="drawer-playlist-title">Your Spotify Playlist</h3>
+        <div class="drawer-meta-row">
+          <span id="drawer-track-count">0 tracks added</span>
+          <span>•</span>
+          <span id="drawer-sync-status">Synced with Spotify 🟢</span>
+        </div>
+        <!-- 1-Click Action Bar -->
+        <div class="drawer-actions-bar">
+          <button class="drawer-action-btn btn-clean-dupes" id="btn-drawer-clean-dupes" title="Delete all duplicate songs in this playlist with 1 click">
+            ✨ Delete Duplicates
+          </button>
+          <button class="drawer-action-btn" id="btn-drawer-swap" title="Switch to another Spotify playlist">
+            ⇄ Swap Playlist
+          </button>
+        </div>
+      </div>
+      <button class="win-btn" id="btn-close-drawer" title="Close Drawer">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+
+    <div class="drawer-content" id="drawer-tracklist">
+      <!-- Tracks dynamically inserted here with ✕ remove button on each track -->
+    </div>
+
+    <div class="drawer-footer">
+      <a href="#" target="_blank" class="liquid-btn" id="btn-open-spotify-playlist" style="display: none;">
+        <span class="btn-text">Open in Spotify App 🎧</span>
+        <div class="liquid-reflection"></div>
+      </a>
+      <button class="glass-btn" onclick="App.openSetupModal(); App.togglePlaylistDrawer();">
+        Create Another Playlist
+      </button>
+    </div>
+  </aside>
+
+  <!-- Settings Modal (Album Artwork Style, Visualizers, Audio) -->
+  <div class="modal-backdrop" id="settings-modal">
+    <div class="glass-modal">
+      <div class="modal-header">
+        <div>
+          <h2>App & Display <span>Settings</span></h2>
+          <p>Customize your album cover appearance, reactive visualizers, and playback.</p>
+        </div>
+        <button class="win-btn" id="btn-settings-close">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="settings-form">
+        <!-- Physical Media & Album Artwork Style -->
+        <div class="form-group">
+          <label class="form-label">Physical Media & Album Artwork Style</label>
+          <div class="setting-desc">Choose your physical media presentation:</div>
+          <select id="setting-album-style" class="glass-select">
+            <option value="record" selected>Picture Disc (Design Printed on Spinning Vinyl Record)</option>
+            <option value="vinyl">Vinyl Sleeve & Disc (Matte Jacket & Sliding Disc)</option>
+            <option value="cd">Compact Disc (Jewel Case & Holographic Disc)</option>
+            <option value="cassette">Cassette Tape (Retro Shell & Dual Spools)</option>
+            <option value="frame">Picture Frame (Gallery Beveled Glass)</option>
+          </select>
+        </div>
+
+        <!-- Visualizer Mode (10 Options) -->
+        <div class="form-group">
+          <label class="form-label">Background Visualizer Style (10 Modes)</label>
+          <select id="setting-viz-mode" class="glass-select">
+            <option value="halo">Spotlight Halo (Radial Sound Ring)</option>
+            <option value="bars">Cyber EQ (Equalizer Columns)</option>
+            <option value="wave">Liquid Wave (Sine Flow)</option>
+            <option value="starfield">Cosmic Starfield (3D Hyperspace Warp)</option>
+            <option value="plasma">Plasma Orb (Solar Coronal Sphere)</option>
+            <option value="matrix">Cyber Rain (Matrix Code Stream)</option>
+            <option value="galaxy">Cosmic Galaxy (Dual-Arm Particle Vortex)</option>
+            <option value="ribbon">Chroma Ribbon (3D Silk Wavebands)</option>
+            <option value="prism">Audio Prism (Kaleidoscope Geometry)</option>
+            <option value="retrogrid">Synthwave Grid (80s Perspective Neon Grid)</option>
+          </select>
+        </div>
+
+        <!-- Toggles -->
+        <div class="form-group">
+          <label class="checkbox-container">
+            <input type="checkbox" id="setting-auto-preview" checked>
+            <span class="checkmark"></span>
+            <span class="checkbox-label">Auto-play 30s audio previews when card appears</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-container">
+            <input type="checkbox" id="setting-spotify-desktop" checked>
+            <span class="checkmark"></span>
+            <span class="checkbox-label">Auto-stream full track to active Spotify desktop app</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="liquid-btn" id="btn-save-settings">
+          <span class="btn-text">Save Preferences ✨</span>
+          <div class="liquid-reflection"></div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Playlist Swap Modal -->
+  <div class="modal-backdrop" id="swap-modal">
+    <div class="glass-modal">
+      <div class="modal-header">
+        <div>
+          <h2>Swap <span>Playlist</span></h2>
+          <p>Choose any Spotify playlist to switch to instantly.</p>
+        </div>
+        <button class="win-btn" id="btn-swap-close">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="swap-search-box">
+        <input type="text" id="swap-playlist-search" class="glass-input" placeholder="🔍 Filter playlists by name...">
+      </div>
+
+      <div class="swap-playlist-list" id="swap-playlist-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup & New Playlist Modal (Categories Removed) -->
+  <div class="modal-backdrop" id="setup-modal">
+    <div class="glass-modal">
+      <div class="modal-header">
+        <div>
+          <h2>Create Spotify <span>Playlist</span></h2>
+          <p>Name your playlist to create it on your Spotify account, then start swiping!</p>
+        </div>
+        <button class="win-btn" id="btn-modal-close">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="user-account-badge" id="modal-user-badge">
+        <img id="modal-user-avatar" src="" alt="" class="badge-avatar" style="display: none;">
+        <div class="badge-info">
+          <span class="badge-label">Active Spotify Account</span>
+          <span class="badge-name" id="modal-user-name">Jack21.21</span>
+        </div>
+        <span class="badge-tag">Ready</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Playlist Name</label>
+        <input type="text" id="playlist-name-input" class="glass-input" placeholder="e.g. 🔥 My Swiped Playlist 2026">
+      </div>
+
+      <div class="form-group" id="existing-playlist-group" style="display: none;">
+        <label class="form-label">Or Add to Existing Spotify Playlist</label>
+        <select id="existing-playlist-select" class="glass-select">
+          <option value="">-- Or Select an Existing Playlist --</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-container">
+          <input type="checkbox" id="playlist-public-check" checked>
+          <span class="checkmark"></span>
+          <span class="checkbox-label">Make playlist public on my Spotify profile</span>
+        </label>
+      </div>
+
+      <div class="modal-footer">
+        <button class="liquid-btn" id="btn-start-swiping">
+          <span class="btn-text">Create on Spotify & Start Swiping 🔥</span>
+          <div class="liquid-reflection"></div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confetti Container -->
+  <div id="confetti-container"></div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <span class="toast-icon">🎵</span>
+    <span class="toast-text">Message</span>
+  </div>
+
+  <!-- Window Corner Resize Grip -->
+  <div class="window-resize-grip" id="window-resize-grip" title="Drag to Resize Window"></div>
+
+  <!-- Scripts -->
+  <script src="js/theme.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/visualizer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

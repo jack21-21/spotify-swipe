@@ -709,12 +709,16 @@ const MobileApp = (() => {
 
         if (!poolMap.has(track.id)) {
           const plays = Math.floor(Math.random() * 45) + 12;
+          const year = track.album?.release_date ? track.album.release_date.split('-')[0] : '';
+          const totalTracks = track.album?.total_tracks || 0;
           poolMap.set(track.id, {
             id: track.id,
             uri: track.uri,
             name: track.name,
             artist: track.artists?.map(a => a.name).join(', ') || 'Unknown Artist',
             album: track.album?.name || '',
+            year: year,
+            total_tracks: totalTracks,
             cover_url: track.album?.images?.[0]?.url || '',
             preview_url: track.preview_url,
             duration_ms: track.duration_ms,
@@ -777,50 +781,65 @@ const MobileApp = (() => {
       name: 'My Own Summer (Shove It)',
       artist: 'Deftones',
       album: 'Around the Fur',
+      year: '1997',
+      total_tracks: 10,
+      duration_ms: 215000,
       cover_url: 'https://i.scdn.co/image/ab67616d0000b273b5220c31c4f52601ba472be9',
+      preview_url: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/7b/82/e2/7b82e273-7849-4387-2209-f086eef927cd/mzaf_7584156168517905468.plus.aac.p.m4a',
       uri: 'spotify:track:1158ckiBZuS42UVypt4x2i',
-      plays: 48,
-      duration_ms: 215000
+      plays: 48
     },
     {
       id: 'demo-2',
       name: "Scotty Doesn't Know",
       artist: 'Lustra',
       album: 'Left for Dead',
+      year: '2004',
+      total_tracks: 12,
+      duration_ms: 176000,
       cover_url: 'https://i.scdn.co/image/ab67616d0000b273461aa3fcbe6fdb0c0f9948c2',
+      preview_url: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/50/95/ca/5095ca26-eb93-ac13-c4a5-52c7835a6435/mzaf_7762622222979097808.plus.aac.p.m4a',
       uri: 'spotify:track:0Jjp44W9s8FqH7h5bL7k8t',
-      plays: 42,
-      duration_ms: 176000
+      plays: 42
     },
     {
       id: 'demo-3',
       name: 'Fever',
       artist: 'Buckshot, fakemink',
       album: 'Fever',
+      year: '2025',
+      total_tracks: 1,
+      duration_ms: 144000,
       cover_url: 'https://i.scdn.co/image/ab67616d0000b273673f4fa5da8df3859665bc7b',
+      preview_url: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/a6/11/7f/a6117ffa-e13b-6f3a-238d-e2044ae23ea7/mzaf_10702547909548637745.plus.aac.p.m4a',
       uri: 'spotify:track:4jX0jE78rR1wYQ2k9L2V3N',
-      plays: 24,
-      duration_ms: 144000
+      plays: 24
     },
     {
       id: 'demo-4',
       name: 'Smells Like Teen Spirit',
       artist: 'Nirvana',
       album: 'Nevermind',
+      year: '1991',
+      total_tracks: 13,
+      duration_ms: 301000,
       cover_url: 'https://i.scdn.co/image/ab67616d0000b273e175a19e530c898d167d39bf',
+      preview_url: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/65/49/4e/65494e02-b6d3-26d8-6b0c-9bd98dcf4d5d/mzaf_7665413316386155700.plus.aac.p.m4a',
       uri: 'spotify:track:5ghIJDhubRg0bKoAt9qiEx',
-      plays: 95,
-      duration_ms: 301000
+      plays: 95
     },
     {
       id: 'demo-5',
       name: 'Do I Wanna Know?',
       artist: 'Arctic Monkeys',
       album: 'AM',
+      year: '2013',
+      total_tracks: 12,
+      duration_ms: 272000,
       cover_url: 'https://i.scdn.co/image/ab67616d0000b2734ae1c4c5c45aabe565499163',
+      preview_url: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/71/cb/ba/71cbbaa1-016b-0e73-dfc2-9f4ede9ddfc0/mzaf_16266777024198047150.plus.aac.p.m4a',
       uri: 'spotify:track:5FVd6KXrgO9B3JLmRLLeo4',
-      plays: 87,
-      duration_ms: 272000
+      plays: 87
     }
   ];
 
@@ -988,6 +1007,14 @@ const MobileApp = (() => {
 
   /* ---------------------------- Card Rendering (5 Physical Media Formats) ---------------------------- */
 
+  function formatDuration(ms) {
+    if (!ms || ms <= 0) return '3:00';
+    const totalSecs = Math.floor(ms / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = (totalSecs % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  }
+
   function renderCards() {
     const container = $('#card-deck');
     if (!container) return;
@@ -1023,6 +1050,19 @@ const MobileApp = (() => {
       card.dataset.index = trackIndex;
       card.dataset.id = track.id;
 
+      const albumMetaParts = [];
+      if (track.album) albumMetaParts.push(escapeHtml(track.album));
+      if (track.total_tracks && Number(track.total_tracks) > 1) {
+        albumMetaParts.push(`${track.total_tracks} tracks`);
+      }
+      if (track.year) {
+        albumMetaParts.push(escapeHtml(String(track.year)));
+      }
+      if (track.duration_ms) {
+        albumMetaParts.push(formatDuration(track.duration_ms));
+      }
+      const albumMetaString = albumMetaParts.join(' • ') || 'Single';
+
       card.innerHTML = `
         <div class="swipe-badge like">ADD 💚</div>
         <div class="swipe-badge nope">PASS ✖</div>
@@ -1035,10 +1075,10 @@ const MobileApp = (() => {
 
           <!-- 5 Format toggles -->
           <div class="media-format-pill">
-            <button class="media-toggle-btn ${currentAlbumStyle === 'record' ? 'active' : ''}" data-format="record" title="Picture Disc">🎵</button>
-            <button class="media-toggle-btn ${currentAlbumStyle === 'vinyl' ? 'active' : ''}" data-format="vinyl" title="Vinyl LP">💿</button>
-            <button class="media-toggle-btn ${currentAlbumStyle === 'cd' ? 'active' : ''}" data-format="cd" title="CD Jewel Case">💽</button>
-            <button class="media-toggle-btn ${currentAlbumStyle === 'cassette' ? 'active' : ''}" data-format="cassette" title="Cassette">📼</button>
+            <button class="media-toggle-btn ${currentAlbumStyle === 'record' ? 'active' : ''}" data-format="record" title="Picture Disc (Design on Record)">🎵</button>
+            <button class="media-toggle-btn ${currentAlbumStyle === 'vinyl' ? 'active' : ''}" data-format="vinyl" title="Vinyl LP in Jacket">🖤</button>
+            <button class="media-toggle-btn ${currentAlbumStyle === 'cd' ? 'active' : ''}" data-format="cd" title="Compact Disc & Jewel Case">💿</button>
+            <button class="media-toggle-btn ${currentAlbumStyle === 'cassette' ? 'active' : ''}" data-format="cassette" title="Cassette Tape">📼</button>
             <button class="media-toggle-btn ${currentAlbumStyle === 'frame' ? 'active' : ''}" data-format="frame" title="Picture Frame">🖼️</button>
           </div>
 
@@ -1080,6 +1120,7 @@ const MobileApp = (() => {
               <div class="cd-case-reflection"></div>
             </div>
             <div class="cd-holographic-disc">
+              <div class="cd-art-disc-face" style="background-image: url('${track.cover_url || ''}');"></div>
               <div class="cd-holo-sheen"></div>
               <div class="cd-center-clear-ring">
                 <div class="cd-spindle"></div>
@@ -1127,7 +1168,7 @@ const MobileApp = (() => {
         <div class="card-track-info">
           <h2 class="track-title">${escapeHtml(track.name)}</h2>
           <p class="track-artist">${escapeHtml(track.artist)}</p>
-          <p class="track-album-meta">${escapeHtml(track.album || '')}</p>
+          <p class="track-album-meta">${albumMetaString}</p>
         </div>
 
         <!-- Audio Teaser Bar -->
@@ -1214,10 +1255,9 @@ const MobileApp = (() => {
       b.classList.toggle('active', b.dataset.format === format);
     });
 
-    const stage = $('.active-card .album-stage');
-    if (stage) {
+    $$('.album-stage').forEach(stage => {
       stage.dataset.media = format;
-    }
+    });
   }
 
   function updateButtonStates() {
@@ -1688,6 +1728,35 @@ const MobileApp = (() => {
         clientId = val;
         localStorage.setItem('swipemobile_client_id', clientId);
         showToast('Client ID saved!', '💾');
+      }
+    });
+
+    // Desktop PC Keyboard Shortcuts (Space: preview, Left: pass, Right: like, Z: undo, 1-5: format)
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        handlePreviewButtonClick();
+      } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+        e.preventDefault();
+        completeSwipe('left');
+      } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+        e.preventDefault();
+        completeSwipe('right');
+      } else if (e.code === 'KeyZ') {
+        e.preventDefault();
+        undoLastSwipe();
+      } else if (e.code === 'Digit1') {
+        setAlbumFormat('record');
+      } else if (e.code === 'Digit2') {
+        setAlbumFormat('vinyl');
+      } else if (e.code === 'Digit3') {
+        setAlbumFormat('cd');
+      } else if (e.code === 'Digit4') {
+        setAlbumFormat('cassette');
+      } else if (e.code === 'Digit5') {
+        setAlbumFormat('frame');
       }
     });
   }

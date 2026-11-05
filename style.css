@@ -635,18 +635,18 @@ html, body {
   animation: discSpin 10s linear infinite;
 }
 
-/* --- Format 3: 💽 CD Jewel Case & Holographic Disc --- */
+/* --- Format 3: 💿 CD Jewel Case & Holographic Disc --- */
 .cd-jewel-case {
   position: relative;
-  width: 210px;
-  height: 210px;
-  border-radius: 5px;
+  width: 190px;
+  height: 190px;
+  border-radius: 6px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
   border: 2px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
   z-index: 2;
-  transform: translateX(-24px);
+  transform: translateX(-20px);
   transition: transform 0.4s ease;
 }
 
@@ -662,7 +662,7 @@ html, body {
   top: 0;
   left: 0;
   bottom: 0;
-  width: 14px;
+  width: 12px;
   background: linear-gradient(to right, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
   border-right: 1px solid rgba(255, 255, 255, 0.25);
 }
@@ -676,27 +676,39 @@ html, body {
 
 .cd-holographic-disc {
   position: absolute;
-  width: 205px;
-  height: 205px;
+  width: 185px;
+  height: 185px;
   border-radius: 50%;
-  right: 12px;
+  right: 18px;
   z-index: 1;
   background: conic-gradient(
     from 0deg,
-    #d1d5db 0deg,
+    #e2e8f0 0deg,
     #fbcfe8 45deg,
     #bfdbfe 90deg,
     #a7f3d0 135deg,
     #fef08a 180deg,
     #fed7aa 225deg,
     #c7d2fe 270deg,
-    #d1d5db 360deg
+    #e2e8f0 360deg
   );
   border: 2px solid rgba(255, 255, 255, 0.6);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+
+.cd-art-disc-face {
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.88;
+  mix-blend-mode: multiply;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .cd-holo-sheen {
@@ -706,24 +718,27 @@ html, body {
   background: radial-gradient(circle, transparent 30%, rgba(255,255,255,0.4) 31%, transparent 32%),
               repeating-radial-gradient(circle, rgba(255,255,255,0.15) 0, rgba(255,255,255,0.15) 1px, transparent 2px, transparent 6px);
   mix-blend-mode: overlay;
+  pointer-events: none;
 }
 
 .cd-center-clear-ring {
-  width: 68px;
-  height: 68px;
+  position: relative;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.35);
   backdrop-filter: blur(4px);
-  border: 3px solid rgba(255, 255, 255, 0.8);
+  border: 3px solid rgba(255, 255, 255, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.4);
+  z-index: 3;
 }
 
 .cd-spindle {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: #000;
   border: 2px solid rgba(255, 255, 255, 0.8);
@@ -1700,4 +1715,55 @@ html, body {
   position: absolute;
   border-radius: 3px;
   will-change: transform, opacity;
+}
+
+/* ---------------------------- Desktop PC Enhancements ---------------------------- */
+.desktop-keyboard-hints {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 10px;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.key-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.key-hint kbd {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.72rem;
+  font-family: inherit;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+@media (min-width: 768px) {
+  body {
+    background: radial-gradient(circle at 50% 20%, #151824 0%, #08090d 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-app {
+    max-width: 440px;
+    height: 94vh;
+    max-height: 860px;
+    border-radius: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 80px rgba(var(--accent), 0.15);
+    overflow: hidden;
+  }
+
+  .desktop-keyboard-hints {
+    display: flex;
+  }
 }

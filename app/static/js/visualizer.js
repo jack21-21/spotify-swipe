@@ -10,7 +10,7 @@ class AudioVisualizer {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = window.devicePixelRatio || 1;
     this.w = 0;
     this.h = 0;
     this.mode = 'halo'; // default mode

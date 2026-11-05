@@ -1,20 +1,15 @@
 /**
- * Spotify Swipe Mobile — High-Fidelity Audio Preview Engine
- * Real Music Audio Player optimized for mobile browsers (Android / iOS / Samsung).
+ * Spotify Swipe — High-Fidelity Audio Preview Engine (PC & Mobile)
+ * Real Music Audio Player supporting 100% of modern browsers (Chrome, Edge, Firefox, Safari, Android).
  * Zero synthetic beeps — only authentic studio music previews & Spotify playback.
  */
 
 'use strict';
 
 const AudioManager = (() => {
-  // Mobile-compatible HTML5 Audio Element
+  // Mobile & Desktop compatible HTML5 Audio Element
   const audio = new Audio();
   audio.preload = 'auto';
-  // Note: Do not set crossOrigin = 'anonymous' unless using Web Audio AnalyserNode,
-  // as Apple and CDN audio servers may reject or fail on CORS media headers.
-
-  // 44-byte valid silent WAV data URI to unlock mobile audio pipeline without errors
-  const SILENT_BUFFER_DATA_URI = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
 
   let currentTrack = null;
   let isPlaying = false;
@@ -27,45 +22,37 @@ const AudioManager = (() => {
   const onErrorCallbacks = [];
 
   /**
-   * Prime & unlock the mobile HTML5 audio engine on user touch.
-   * Mobile browsers (Android Chrome, iOS Safari) require an initial user gesture.
+   * Prime & unlock mobile/browser audio policy on user interaction.
+   * Uses an isolated throwaway Audio element so it NEVER pauses or resets the main player!
    */
   function unlockMobileAudio() {
     if (isUnlocked) return;
+    isUnlocked = true;
     try {
-      audio.src = SILENT_BUFFER_DATA_URI;
-      const p = audio.play();
-      if (p !== undefined) {
-        p.then(() => {
-          audio.pause();
-          isUnlocked = true;
-        }).catch(() => {});
-      }
+      const prime = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      prime.play().then(() => prime.remove()).catch(() => {});
     } catch (e) {}
   }
 
-  // Bind to any first user touch on the screen
+  // Bind to any initial user gesture
   window.addEventListener('touchstart', unlockMobileAudio, { once: true, passive: true });
   window.addEventListener('pointerdown', unlockMobileAudio, { once: true, passive: true });
   window.addEventListener('click', unlockMobileAudio, { once: true, passive: true });
+  window.addEventListener('keydown', unlockMobileAudio, { once: true, passive: true });
 
   /* ---------------------------- Audio Event Handlers ---------------------------- */
 
   audio.addEventListener('play', () => {
-    // Ignore play events from silent buffer priming
-    if (audio.src.startsWith('data:audio/wav')) return;
     isPlaying = true;
     notifyStateChange();
   });
 
   audio.addEventListener('playing', () => {
-    if (audio.src.startsWith('data:audio/wav')) return;
     isPlaying = true;
     notifyStateChange();
   });
 
   audio.addEventListener('pause', () => {
-    if (audio.src.startsWith('data:audio/wav')) return;
     isPlaying = false;
     notifyStateChange();
   });
@@ -77,7 +64,6 @@ const AudioManager = (() => {
   });
 
   audio.addEventListener('timeupdate', () => {
-    if (audio.src.startsWith('data:audio/wav')) return;
     const cur = audio.currentTime || 0;
     const dur = audio.duration || 30;
     const progress = dur > 0 ? Math.min(1, cur / dur) : 0;
@@ -85,7 +71,6 @@ const AudioManager = (() => {
   });
 
   audio.addEventListener('error', (e) => {
-    if (audio.src.startsWith('data:audio/wav')) return;
     console.warn('[Audio] Playback error on source:', audio.src, e);
     isPlaying = false;
     notifyStateChange();
@@ -99,56 +84,49 @@ const AudioManager = (() => {
   /* ---------------------------- Public Playback Methods ---------------------------- */
 
   /**
-   * Plays a track's audio preview immediately with real audio.
+   * Plays a track's audio preview immediately with real studio audio.
    */
   function playTrack(track, autoPlay = true) {
-    unlockMobileAudio();
+    if (!track) return;
     currentTrack = track;
 
-    if (!track || !track.preview_url) {
+    if (!track.preview_url) {
       isPlaying = false;
       notifyStateChange();
       return;
     }
 
-    // If already playing this exact track, resume if paused
-    if (audio.src === track.preview_url && !audio.paused) {
-      isPlaying = true;
-      notifyStateChange();
-      return;
-    }
-
-    try {
+    // Only change audio.src if it's actually a different URL
+    if (audio.src !== track.preview_url) {
       audio.src = track.preview_url;
       audio.currentTime = 0;
-      audio.volume = isMuted ? 0 : volume;
+    }
 
-      if (autoPlay) {
-        const p = audio.play();
-        if (p !== undefined) {
-          p.then(() => {
-            isPlaying = true;
-            notifyStateChange();
-          }).catch(err => {
-            console.warn('[Audio] Autoplay paused by mobile browser policy:', err.message);
-            isPlaying = false;
-            notifyStateChange();
-          });
-        }
+    audio.volume = isMuted ? 0 : volume;
+
+    if (autoPlay) {
+      const p = audio.play();
+      if (p !== undefined) {
+        p.then(() => {
+          isPlaying = true;
+          notifyStateChange();
+        }).catch(err => {
+          console.warn('[Audio] Autoplay blocked or interrupted:', err.message);
+          isPlaying = false;
+          notifyStateChange();
+        });
       }
-    } catch (err) {
-      console.warn('[Audio] Error setting audio source:', err);
-      isPlaying = false;
-      notifyStateChange();
     }
   }
 
   function togglePlayPause() {
     unlockMobileAudio();
-    if (isPlaying && !audio.paused) {
+    if (!audio.paused && isPlaying) {
       pause();
     } else {
-      resume();
+      if (currentTrack && currentTrack.preview_url) {
+        playTrack(currentTrack, true);
+      }
     }
   }
 
@@ -163,19 +141,7 @@ const AudioManager = (() => {
   function resume() {
     unlockMobileAudio();
     if (currentTrack && currentTrack.preview_url) {
-      if (audio.src !== currentTrack.preview_url) {
-        audio.src = currentTrack.preview_url;
-      }
-      audio.volume = isMuted ? 0 : volume;
-      const p = audio.play();
-      if (p !== undefined) {
-        p.then(() => {
-          isPlaying = true;
-          notifyStateChange();
-        }).catch(err => {
-          console.warn('[Audio] Resume blocked:', err);
-        });
-      }
+      playTrack(currentTrack, true);
     }
   }
 
@@ -200,7 +166,7 @@ const AudioManager = (() => {
     resume,
     setVolume,
     seek,
-    isPlaying: () => isPlaying && !audio.paused,
+    isPlaying: () => !audio.paused && isPlaying,
     getCurrentTrack: () => currentTrack,
     onTimeUpdate: (cb) => onTimeUpdateCallbacks.push(cb),
     onStateChange: (cb) => onStateChangeCallbacks.push(cb),
