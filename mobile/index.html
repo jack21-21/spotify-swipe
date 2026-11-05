@@ -9,13 +9,13 @@
   <meta name="apple-mobile-web-app-title" content="SpotifySwipe">
   <meta name="description" content="Tinder-style Spotify playlist maker with physical media frames and real music previews">
   
-  <title>Spotify Swipe v1.2.2</title>
+  <title>Spotify Swipe v1.2.3</title>
   
-  <link rel="manifest" href="manifest.json?v=1.2.2">
+  <link rel="manifest" href="manifest.json?v=1.2.3">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   
-  <link rel="stylesheet" href="style.css?v=1.2.2">
+  <link rel="stylesheet" href="style.css?v=1.2.3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -25,7 +25,7 @@
   <div class="ambient-glow ambient-glow-top"></div>
   <div class="ambient-glow ambient-glow-bottom"></div>
 
-  <!-- Main Mobile App Layout -->
+  <!-- Main Mobile / Desktop App Layout -->
   <div class="mobile-app-wrapper">
     <!-- Streamlined Header for Samsung A55 / Mobile & Desktop PC -->
     <header class="mobile-header">
@@ -33,7 +33,7 @@
         <div class="app-logo">
           <img src="icon-192.png" alt="Logo" class="app-logo-icon" />
           <span class="app-title">Swipe</span>
-          <span class="app-version-badge" title="Live Version">v1.2.2</span>
+          <span class="app-version-badge" title="Live Version">v1.2.3</span>
         </div>
       </div>
 
@@ -54,6 +54,12 @@
           <span class="desktop-vol-label" id="desktop-vol-label">85%</span>
         </div>
 
+        <!-- Sync All Button for Desktop -->
+        <button class="desktop-sync-btn" id="btn-desktop-sync" title="Sync All Tracks to Spotify">
+          <svg viewBox="0 0 24 24" class="spotify-svg-mini"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
+          <span>Sync to Spotify</span>
+        </button>
+
         <!-- Settings Button -->
         <button class="icon-btn" id="btn-settings" aria-label="Settings">⚙️</button>
 
@@ -68,16 +74,38 @@
       </div>
     </header>
 
-    <!-- Card Deck Area -->
-    <main class="deck-viewport">
-      <div id="deck-loader" class="deck-loader">
-        <div class="spinner"></div>
-        <span>Finding your next track...</span>
-      </div>
+    <!-- Main Workspace Area: Card Deck on Left, Desktop Queue on Right -->
+    <div class="app-main-workspace">
+      <!-- Card Deck Viewport -->
+      <main class="deck-viewport">
+        <div id="deck-loader" class="deck-loader">
+          <div class="spinner"></div>
+          <span>Finding your next track...</span>
+        </div>
 
-      <!-- Card Stack Container -->
-      <div id="card-deck" class="card-deck"></div>
-    </main>
+        <!-- Card Stack Container -->
+        <div id="card-deck" class="card-deck"></div>
+      </main>
+
+      <!-- Desktop-Exclusive Live Playlist Sidebar -->
+      <aside class="desktop-queue-panel glass-panel" id="desktop-queue-panel">
+        <div class="queue-panel-header">
+          <div class="queue-panel-title">
+            <span class="queue-icon">🎧</span>
+            <div>
+              <h3 id="desktop-queue-name">Swipe Playlist</h3>
+              <span id="desktop-queue-meta">0 songs • Synced with Spotify</span>
+            </div>
+          </div>
+          <button class="queue-sync-btn" id="btn-queue-sync-now" title="Sync All Songs to Spotify">
+            <span>Sync to Spotify 🟢</span>
+          </button>
+        </div>
+        <div class="desktop-queue-list" id="desktop-queue-list">
+          <!-- Queue items rendered here -->
+        </div>
+      </aside>
+    </div>
 
     <!-- Mobile Action Dock -->
     <footer class="action-dock">
@@ -116,7 +144,7 @@
     </div>
 
     <!-- Desktop Version Bar -->
-    <div class="desktop-version-bar">Spotify Swipe • <span class="badge-v">v1.2.2 Live</span> • Direct Spotify Connect</div>
+    <div class="desktop-version-bar">Spotify Swipe • <span class="badge-v">v1.2.3 Live</span> • Direct Spotify Connect</div>
   </div>
 
   <!-- Mobile-Native Playlist Selector Sheet (Opens on tapping header pill) -->
@@ -159,15 +187,17 @@
 
     <!-- Quick Actions -->
     <div class="drawer-quick-actions">
+      <button class="drawer-action-btn btn-sync-spotify-now" id="btn-drawer-sync-now" title="Sync All Tracks to Spotify">
+        <span>⚡ Sync to Spotify</span>
+      </button>
       <button class="drawer-action-btn btn-switch-pl" id="btn-open-selector-from-drawer">
-        <span>⇄ Switch Playlist</span>
+        <span>⇄ Switch</span>
       </button>
       <button class="drawer-action-btn btn-dupe-clean" id="btn-remove-duplicates">
-        <span>🧹 Remove Dupes</span>
+        <span>🧹 Dupes</span>
       </button>
       <button class="drawer-action-btn btn-open-spotify" id="btn-open-spotify-app">
-        <svg viewBox="0 0 24 24" class="spotify-svg-mini"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
-        <span>Open Spotify</span>
+        <span>Open App</span>
       </button>
     </div>
 
@@ -212,12 +242,23 @@
           </div>
         </div>
 
+        <!-- Diagnostics & Error Codes Section -->
+        <div class="setting-item diagnostics-item">
+          <label>Diagnostics & Error Codes</label>
+          <div class="error-codes-summary">
+            <div class="err-row"><code>ERR_SPOTIFY_403</code><span>Insufficient permissions or playlist not owned</span></div>
+            <div class="err-row"><code>ERR_AUTH_001</code><span>Not signed into Spotify or token expired</span></div>
+            <div class="err-row"><code>ERR_TRACK_001</code><span>Track already in playlist</span></div>
+            <div class="err-row"><code>ERR_AUDIO_001</code><span>Audio preview unavailable for track</span></div>
+          </div>
+        </div>
+
         <div class="setting-item version-item">
           <div class="version-row">
             <span>App Version:</span>
-            <span class="version-tag">v1.2.2</span>
+            <span class="version-tag">v1.2.3</span>
           </div>
-          <small class="version-desc">Updated Nov 5 • PC Desktop Mode & Direct Spotify Sync</small>
+          <small class="version-desc">Updated Nov 5 • Full-Screen PC Mode & Auto-Sync Engine</small>
         </div>
 
         <div class="modal-footer-actions">
@@ -237,8 +278,8 @@
   <div id="confetti-container" class="confetti-container"></div>
 
   <!-- Core Scripts -->
-  <script src="theme.js?v=1.2.2"></script>
-  <script src="audio.js?v=1.2.2"></script>
-  <script src="app.js?v=1.2.2"></script>
+  <script src="theme.js?v=1.2.3"></script>
+  <script src="audio.js?v=1.2.3"></script>
+  <script src="app.js?v=1.2.3"></script>
 </body>
 </html>
