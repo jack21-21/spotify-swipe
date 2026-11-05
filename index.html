@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="SpotifySwipe">
   <meta name="description" content="Tinder-style Spotify playlist maker with physical media frames and real music previews">
   
-  <title>Spotify Swipe v2.1.2 - Mobile & PC Web Player</title>
+  <title>Spotify Swipe v2.1.3 - Mobile & PC Web Player</title>
   
-  <link rel="manifest" href="manifest.json?v=2.1.2">
+  <link rel="manifest" href="manifest.json?v=2.1.3">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   
@@ -33,7 +33,7 @@
         <div class="app-logo">
           <img src="icon-192.png" alt="Logo" class="app-logo-icon" />
           <span class="app-title">Swipe</span>
-          <span class="app-version-badge" title="Live Version">v2.1.2</span>
+          <span class="app-version-badge" title="Live Version">v2.1.3</span>
         </div>
       </div>
 
@@ -64,6 +64,9 @@
           <svg viewBox="0 0 24 24" class="spotify-svg-mini"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
           <span>Sync to Spotify</span>
         </button>
+
+        <!-- Lock Button -->
+        <button class="icon-btn" id="btn-lock-app" aria-label="Lock App" title="Lock App (PIN 1862)">🔒</button>
 
         <!-- Settings Button -->
         <button class="icon-btn" id="btn-settings" aria-label="Settings">⚙️</button>
@@ -149,7 +152,7 @@
     </div>
 
     <!-- Desktop Version Bar -->
-    <div class="desktop-version-bar">Spotify Swipe • <span class="badge-v">v2.1.2 Live</span> • Direct Spotify Connect</div>
+    <div class="desktop-version-bar">Spotify Swipe • <span class="badge-v">v2.1.3 Live</span> • Direct Spotify Connect</div>
   </div>
 
   <!-- Mobile-Native Playlist Selector Sheet (Opens on tapping header pill) -->
@@ -296,14 +299,79 @@
         <div class="setting-item version-item">
           <div class="version-row">
             <span>App Version:</span>
-            <span class="version-tag">v2.1.2</span>
+            <span class="version-tag">v2.1.3</span>
           </div>
-          <small class="version-desc">Direct Spotify App Credentials, Full Write & Library Perms, Dynamic Taste Learning</small>
+          <small class="version-desc">PIN 1862 Guard, Device Protection (PC & Samsung A55), Mobile Fingerprint Passkey, Smart Deduplication</small>
+        </div>
+
+        <!-- Security & Passkey Settings -->
+        <div class="setting-item security-item">
+          <label>Security & Device Protection</label>
+          <div class="security-controls-row">
+            <button class="secondary-btn" id="btn-settings-lock">🔒 Lock App Now</button>
+            <button class="secondary-btn" id="btn-settings-passkey" style="display: none;">🖐️ Enroll Fingerprint Passkey</button>
+          </div>
+          <small class="version-desc">Locked with Master PIN (1862). Authorized exclusively on Jack's PC & Samsung A55.</small>
         </div>
 
         <div class="modal-footer-actions">
           <button class="danger-btn" id="btn-logout">Log Out of Spotify</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App PIN & Biometric Lock Overlay (Master PIN: 1862) -->
+  <div id="app-lock-screen" class="app-lock-screen">
+    <div class="lock-card glass-modal">
+      <div class="lock-shield-icon">🔒</div>
+      <h2 class="lock-title">Spotify Swipe Guard</h2>
+      <p id="lock-screen-subtitle" class="lock-subtitle">Authorized for Jack's PC & Samsung Galaxy A55</p>
+
+      <!-- Unauthorized Device Warning (if opened from unknown device) -->
+      <div id="lock-unauthorized-banner" class="lock-unauthorized-banner" style="display: none;">
+        <span>🚫 Unauthorized Device. This app is locked to Jack's PC and Samsung A55.</span>
+      </div>
+
+      <div class="pin-dots-container">
+        <span class="pin-dot" id="pin-dot-1"></span>
+        <span class="pin-dot" id="pin-dot-2"></span>
+        <span class="pin-dot" id="pin-dot-3"></span>
+        <span class="pin-dot" id="pin-dot-4"></span>
+      </div>
+
+      <div class="pin-error-msg" id="pin-error-msg"></div>
+
+      <!-- Numeric Keypad -->
+      <div class="pin-keypad" id="pin-keypad">
+        <button class="pin-key" data-digit="1">1</button>
+        <button class="pin-key" data-digit="2">2</button>
+        <button class="pin-key" data-digit="3">3</button>
+        <button class="pin-key" data-digit="4">4</button>
+        <button class="pin-key" data-digit="5">5</button>
+        <button class="pin-key" data-digit="6">6</button>
+        <button class="pin-key" data-digit="7">7</button>
+        <button class="pin-key" data-digit="8">8</button>
+        <button class="pin-key" data-digit="9">9</button>
+        <button class="pin-key pin-key-action" id="btn-pin-clear">C</button>
+        <button class="pin-key" data-digit="0">0</button>
+        <button class="pin-key pin-key-action" id="btn-pin-backspace">⌫</button>
+      </div>
+
+      <!-- Mobile-Exclusive Biometric Fingerprint Section -->
+      <div class="mobile-biometric-section" id="mobile-biometric-box" style="display: none;">
+        <button class="btn-biometric-auth" id="btn-biometric-auth">
+          <span class="bio-icon">🖐️</span>
+          <span>Unlock with Fingerprint</span>
+        </button>
+        <button class="btn-biometric-enroll" id="btn-biometric-enroll">
+          <span>Set Up Fingerprint Passkey</span>
+        </button>
+      </div>
+
+      <div class="device-badge-row">
+        <span class="dev-dot">●</span>
+        <span id="dev-status-text">Device Verified</span>
       </div>
     </div>
   </div>

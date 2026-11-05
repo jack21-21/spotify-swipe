@@ -2,7 +2,8 @@
 
 [![Spotify Swipe Live](https://img.shields.io/badge/Live%20App-jack21--21.github.io%2Fspotify--swipe-1ED760?style=for-the-badge&logo=spotify&logoColor=white)](https://jack21-21.github.io/spotify-swipe/)
 [![Platform](https://img.shields.io/badge/Platform-Mobile%20PWA%20%7C%20Fullscreen%20Desktop%20PC-blue?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
-[![Version](https://img.shields.io/badge/Version-v2.1.1%20Live-brightgreen?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
+[![Version](https://img.shields.io/badge/Version-v2.1.3%20Live-brightgreen?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
+[![Security](https://img.shields.io/badge/Security-PIN%201862%20%7C%20Passkey-7c3aed?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
 [![Direct Spotify](https://img.shields.io/badge/Spotify%20API-Direct%20Connect-1DB954?style=for-the-badge&logo=spotify)](https://jack21-21.github.io/spotify-swipe/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey?style=for-the-badge)](LICENSE)
 
@@ -21,33 +22,41 @@ Anyone can start discovering music and building playlists in seconds on any devi
 
 ---
 
-## ✨ Key Features in v2.1.1
+## ✨ Key Features in v2.1.3
 
-### 🎴 1. Tinder-Style Card Swiping with Adaptive Taste Learning
+### 🔒 1. App Security, PIN 1862 & Device Guard
+* **Master PIN Protection (`1862`)**: All sessions are protected by a secure 4-digit PIN lock. Input via the sleek glass numeric keypad on mobile or direct physical keyboard entry on desktop PC.
+* **Authorized Devices Only**: Strictly restricted to **Jack's PC (Windows Desktop)** and **Samsung Galaxy A55 Mobile (`SM-A55...`)**. Unauthorized external devices are flagged with an immediate device barrier.
+* **🖐️ Mobile Biometric Fingerprint Passkey**: On the Samsung Galaxy A55, hardware fingerprint authentication is integrated via WebAuthn platform passkeys (`navigator.credentials`). Unlock in a fraction of a second with your fingerprint, or tap "Enroll Fingerprint Passkey" in Settings.
+* **Instant Lock (🔒)**: Lock the app with 1 tap from the top bar icon or Settings modal whenever leaving your device unattended.
+
+### 🎴 2. Smart Playlist Reuse & Zero-Duplicate Engine
+* **Mass Playlist Creation Prevention**: Never creates accidental duplicate playlists! If a playlist named `Spotify Swipe Jams` (or your custom chosen playlist) already exists in your library, the engine automatically detects and reuses it, appending new songs directly.
 * **Swipe Right (💚)**: Instantly adds the track directly to your active Spotify playlist in real time.
 * **Swipe Left (❌)**: Passes and advances to your next song recommendation.
 * **Undo (↩️)**: Accidentally swiped away a masterpiece? Tap Undo or hit `Z` to bring it right back.
 * **🧠 Adaptive Music Taste Learning**: Say goodbye to clunky genre filters! When you swipe right on an artist (e.g., **Deftones**, Radiohead, The Cure), the algorithm automatically detects your taste and dynamically branches more songs by that artist and related styles directly into your upcoming deck.
-* **✨ 100% Zero-Duplicate Engine**: Smart session deduplication prevents the same track from appearing multiple times across different albums, singles, or remasters.
+* **✨ 100% Zero-Duplicate Track Engine**: Smart session deduplication prevents the same track from appearing multiple times across different albums, singles, or remasters.
 * **⚡ 1-Tap Track Removal (✕)**: Hit the `✕` on any track in your live playlist sidebar or drawer to instantly drop the song without blocking prompts.
 
-### 🔐 2. 100% Direct Spotify Integration (Zero Third-Party APIs)
+### 🔐 3. 100% Direct Spotify Integration (Zero Third-Party APIs)
 * **Direct Spotify Web API**: Sourced directly from Spotify's official servers with verified metadata, genuine album covers from Spotify's CDN (`i.scdn.co`), and direct Spotify track URIs.
 * **Client Credentials & PKCE Auth**: The app starts discovering music immediately on page load, and connects seamlessly to your personal account with one click to manage playlists.
 * **Auto-Protected Playlist Routing**: If you select a playlist you don't own (such as an editorial playlist), the engine automatically safeguards your songs by routing them into your own **"Spotify Swipe Jams"** playlist so you never lose a track.
 
-### 🛡️ 3. Fullscreen Desktop PC Player
+### 🛡️ 4. Fullscreen Desktop PC Player
 * **Expansive Dual-Panel Layout**: Beautifully proportioned across 1080p, 1440p, and 4K displays with responsive card scaling and live ambient glow.
 * **Live Playlist Sidebar**: Watch your playlist grow in real time with album art, track numbers, durations, and quick removal.
 * **Easy-Access Volume Slider**: Quick header volume control (`0% - 100%`) with one-click mute button on desktop (strictly hidden on mobile).
 * **Keyboard Shortcuts**:
+  * `0` - `9`, `Backspace`, `Escape`: Type PIN (1862) to unlock
   * `→` or `D`: Like & Add to Spotify
   * `←` or `A`: Pass / Skip
   * `Space`: Play / Pause Preview
   * `Z`: Undo Last Swipe
   * `1` - `5`: Switch Physical Media Format (Vinyl, CD, Cassette, Frame)
 
-### 💿 4. Realistic Physical Media Audio Formats
+### 💿 5. Realistic Physical Media Audio Formats
 Switch between authentic physical music formats in real time:
 * **💿 Vinyl LP**: Classic record jacket with a 33⅓ RPM rotating vinyl disc and light sheen.
 * **💽 Holographic CD**: Clear jewel case with an iridescent laser compact disc sliding out.

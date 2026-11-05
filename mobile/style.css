@@ -2443,3 +2443,224 @@ html, body {
     font-weight: 800;
   }
 }
+
+/* ---------------------------- App Lock Screen & Guard ---------------------------- */
+.app-lock-screen {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, #151a28 0%, #080a0f 100%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.app-lock-screen.unlocked {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.lock-card {
+  width: 100%;
+  max-width: 360px;
+  background: rgba(18, 22, 34, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 28px;
+  padding: 28px 24px 22px 24px;
+  box-shadow: 0 25px 65px rgba(0, 0, 0, 0.85), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.lock-shield-icon {
+  font-size: 2.2rem;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 0 16px rgba(30, 215, 96, 0.4));
+  animation: pulse-shield 2.5s infinite ease-in-out;
+}
+
+@keyframes pulse-shield {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 12px rgba(30, 215, 96, 0.3)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 22px rgba(30, 215, 96, 0.6)); }
+}
+
+.lock-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.02em;
+}
+
+.lock-subtitle {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin: 0 0 18px 0;
+}
+
+.lock-unauthorized-banner {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  font-size: 0.75rem;
+  color: #fca5a5;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.pin-dots-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  height: 24px;
+}
+
+.pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pin-dot.filled {
+  background: #1ed760;
+  border-color: #1ed760;
+  box-shadow: 0 0 12px rgba(30, 215, 96, 0.6);
+  transform: scale(1.15);
+}
+
+.pin-error-msg {
+  height: 18px;
+  font-size: 0.75rem;
+  color: #f87171;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.pin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+  max-width: 280px;
+  margin-bottom: 16px;
+}
+
+.pin-key {
+  height: 52px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 1.35rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  user-select: none;
+}
+
+.pin-key:hover, .pin-key:active {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(30, 215, 96, 0.4);
+  transform: scale(0.96);
+}
+
+.pin-key-action {
+  font-size: 1.05rem;
+  color: #94a3b8;
+}
+
+.mobile-biometric-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.btn-biometric-auth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 44px;
+  background: rgba(30, 215, 96, 0.16);
+  border: 1px solid rgba(30, 215, 96, 0.4);
+  border-radius: 14px;
+  color: #1ed760;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.btn-biometric-auth:hover {
+  background: rgba(30, 215, 96, 0.25);
+  box-shadow: 0 0 16px rgba(30, 215, 96, 0.35);
+}
+
+.btn-biometric-enroll {
+  background: none;
+  border: none;
+  color: #38bdf8;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px;
+  text-decoration: underline;
+  font-family: inherit;
+}
+
+.device-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #1ed760;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dev-dot {
+  font-size: 0.55rem;
+  color: #1ed760;
+  animation: blink-dot 2s infinite ease-in-out;
+}
+
+@keyframes blink-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+.security-controls-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}

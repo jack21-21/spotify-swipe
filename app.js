@@ -889,8 +889,36 @@ const MobileApp = (() => {
     if (!userProfile) userProfile = await loadUserProfile();
     if (!userProfile) throw new Error('Please login with Spotify to create playlists.');
 
-    const plName = name || 'Spotify Swipe Jams';
+    const plName = (name || 'Spotify Swipe Jams').trim();
     const preservedTracks = Array.isArray(activePlaylist.tracks) ? [...activePlaylist.tracks] : [];
+
+    // Check if user already owns a playlist with this name - REUSE IT to prevent mass playlist creation!
+    if (!allUserPlaylists || allUserPlaylists.length === 0) {
+      await loadUserPlaylists().catch(() => {});
+    }
+
+    const existingMatch = allUserPlaylists.find(p =>
+      p && p.name && p.name.trim().toLowerCase() === plName.toLowerCase() &&
+      p.owner && userProfile && p.owner.id === userProfile.id
+    );
+
+    if (existingMatch) {
+      console.log(`[Spotify] Reusing existing playlist "${plName}" (${existingMatch.id}) instead of creating duplicate.`);
+      activePlaylist.id = existingMatch.id;
+      activePlaylist.name = existingMatch.name;
+      activePlaylist.owner = existingMatch.owner || userProfile;
+      activePlaylist.url = existingMatch.external_urls?.spotify;
+      if (preservedTracks.length > 0 && (!activePlaylist.tracks || activePlaylist.tracks.length === 0)) {
+        activePlaylist.tracks = preservedTracks;
+      }
+      saveActivePlaylistMeta();
+      updatePlaylistStatsUi();
+      renderPlaylistCards();
+      renderDesktopQueue();
+      await loadPlaylistTracks(existingMatch.id);
+      return existingMatch;
+    }
+
     let newPl = null;
 
     // Try 1: POST /me/playlists with public: true
@@ -1005,23 +1033,40 @@ const MobileApp = (() => {
       }
     }
 
-    // 2. Search for any existing user-owned "Spotify Swipe" playlist
-    if (allUserPlaylists.length === 0) {
+    // 2. Search for any existing user-owned playlist matching target name or "spotify swipe"
+    if (!allUserPlaylists || allUserPlaylists.length === 0) {
       await loadUserPlaylists().catch(() => {});
     }
 
+    const targetName = (activePlaylist.name || 'Spotify Swipe Jams').trim().toLowerCase();
+    const existingExact = allUserPlaylists.find(p =>
+      p && p.name && p.name.trim().toLowerCase() === targetName &&
+      p.owner && userProfile && p.owner.id === userProfile.id
+    );
+    if (existingExact) {
+      await selectPlaylist(existingExact.id, false);
+      return existingExact.id;
+    }
+
     const ownedSwipe = allUserPlaylists.find(p => 
-      p.name && p.name.toLowerCase().includes('spotify swipe') &&
-      p.owner && p.owner.id === userProfile.id
+      p && p.name && p.name.toLowerCase().includes('spotify swipe') &&
+      p.owner && userProfile && p.owner.id === userProfile.id
     );
     if (ownedSwipe) {
       await selectPlaylist(ownedSwipe.id, false);
       return ownedSwipe.id;
     }
 
-    // 3. Create new dedicated user playlist "Spotify Swipe Jams"
+    // 3. Fallback to any owned playlist
+    const anyOwned = allUserPlaylists.find(p => p && p.owner && userProfile && p.owner.id === userProfile.id);
+    if (anyOwned) {
+      await selectPlaylist(anyOwned.id, false);
+      return anyOwned.id;
+    }
+
+    // 4. Create new dedicated user playlist "Spotify Swipe Jams" if none exist
     try {
-      showToast('Creating "Spotify Swipe Jams" on your Spotify...', '⏳');
+      showToast('Setting up "Spotify Swipe Jams" on your Spotify...', '⏳');
       const created = await createSpotifyPlaylist('Spotify Swipe Jams');
       return created.id;
     } catch (createErr) {
@@ -2506,9 +2551,292 @@ const MobileApp = (() => {
     }
   }
 
+  /* ---------------------------- App Security & PIN 1862 Guard ---------------------------- */
+  const MASTER_PIN = '1862';
+  let enteredPin = '';
+
+  function checkDeviceAuthorization() {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    const platform = (navigator.platform || '').toLowerCase();
+
+    // Jack's PC (Windows Desktop)
+    const isWindowsPC = /windows|win32|win64|wow64|x64/.test(ua) || platform.includes('win');
+
+    // Jack's Samsung Galaxy A55 Phone (Android / Samsung model SM-A55... or mobile Android)
+    const isSamsungA55 = /sm-a55|sm-a556|samsung/.test(ua) || (/android/.test(ua) && !/windows/.test(ua));
+
+    // Stored authorization token if previously enrolled
+    const isEnrolledToken = localStorage.getItem('swipe_authorized_device_token') === 'jack_authorized_device';
+
+    if (isWindowsPC) {
+      return { authorized: true, deviceName: "Jack's PC (Windows)", isMobile: false };
+    }
+    if (isSamsungA55 || isEnrolledToken) {
+      localStorage.setItem('swipe_authorized_device_token', 'jack_authorized_device');
+      return { authorized: true, deviceName: "Samsung Galaxy A55", isMobile: true };
+    }
+
+    // Unauthorized device (e.g. unknown iOS, macOS, unknown device)
+    const isGenericMobile = /android|iphone|ipad|ipod|mobile/.test(ua);
+    return { authorized: false, deviceName: "Unauthorized Device", isMobile: isGenericMobile };
+  }
+
+  function isAppUnlocked() {
+    return sessionStorage.getItem('spotify_swipe_unlocked') === 'true';
+  }
+
+  function updatePinDots() {
+    for (let i = 1; i <= 4; i++) {
+      const dot = $(`#pin-dot-${i}`);
+      if (dot) {
+        if (i <= enteredPin.length) {
+          dot.classList.add('filled');
+        } else {
+          dot.classList.remove('filled');
+        }
+      }
+    }
+  }
+
+  function unlockApp() {
+    sessionStorage.setItem('spotify_swipe_unlocked', 'true');
+    const lockScreen = $('#app-lock-screen');
+    if (lockScreen) {
+      lockScreen.classList.add('unlocked');
+    }
+    enteredPin = '';
+    updatePinDots();
+    const errMsg = $('#pin-error-msg');
+    if (errMsg) errMsg.textContent = '';
+  }
+
+  function lockApp() {
+    sessionStorage.removeItem('spotify_swipe_unlocked');
+    const lockScreen = $('#app-lock-screen');
+    if (lockScreen) {
+      lockScreen.classList.remove('unlocked');
+    }
+    enteredPin = '';
+    updatePinDots();
+    const errMsg = $('#pin-error-msg');
+    if (errMsg) errMsg.textContent = '';
+    showToast('App Locked 🔒', '🛡️');
+  }
+
+  function handlePinDigit(digit) {
+    if (isAppUnlocked()) return;
+    const devInfo = checkDeviceAuthorization();
+    if (!devInfo.authorized) {
+      const errMsg = $('#pin-error-msg');
+      if (errMsg) {
+        errMsg.style.color = '#f87171';
+        errMsg.textContent = 'Restricted: Jack\'s PC & Samsung A55 only.';
+      }
+      return;
+    }
+
+    if (enteredPin.length < 4) {
+      enteredPin += digit;
+      updatePinDots();
+
+      if (enteredPin.length === 4) {
+        verifyPin();
+      }
+    }
+  }
+
+  function handlePinBackspace() {
+    if (isAppUnlocked()) return;
+    if (enteredPin.length > 0) {
+      enteredPin = enteredPin.slice(0, -1);
+      updatePinDots();
+      const errMsg = $('#pin-error-msg');
+      if (errMsg) errMsg.textContent = '';
+    }
+  }
+
+  function handlePinClear() {
+    if (isAppUnlocked()) return;
+    enteredPin = '';
+    updatePinDots();
+    const errMsg = $('#pin-error-msg');
+    if (errMsg) errMsg.textContent = '';
+  }
+
+  function verifyPin() {
+    const errMsg = $('#pin-error-msg');
+    const keypad = $('#pin-keypad');
+
+    if (enteredPin === MASTER_PIN) {
+      if (errMsg) {
+        errMsg.style.color = '#1ed760';
+        errMsg.textContent = 'Unlocked! Welcome back 💚';
+      }
+      setTimeout(() => {
+        unlockApp();
+        showToast('App Unlocked! 🔓', '👋');
+      }, 250);
+    } else {
+      if (errMsg) {
+        errMsg.style.color = '#f87171';
+        errMsg.textContent = 'Incorrect PIN (Default: 1862)';
+      }
+      if (keypad) {
+        keypad.style.animation = 'shake 0.4s ease';
+        setTimeout(() => {
+          if (keypad) keypad.style.animation = '';
+        }, 400);
+      }
+      setTimeout(() => {
+        enteredPin = '';
+        updatePinDots();
+      }, 500);
+    }
+  }
+
+  async function registerBiometricPasskey() {
+    const devInfo = checkDeviceAuthorization();
+    if (!devInfo.isMobile) {
+      showToast('Biometric fingerprint is only available on Samsung A55 mobile', 'ℹ️');
+      return;
+    }
+    if (!window.PublicKeyCredential) {
+      showToast('WebAuthn / Passkeys not supported on this browser', '⚠️');
+      return;
+    }
+    try {
+      showToast('Touch your fingerprint scanner to enroll...', '🖐️');
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+      const userId = new Uint8Array([1, 8, 6, 2]);
+
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge: challenge,
+          rp: { name: 'Spotify Swipe', id: window.location.hostname },
+          user: {
+            id: userId,
+            name: 'jack',
+            displayName: 'Jack (Samsung Galaxy A55)'
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: 'public-key' },
+            { alg: -257, type: 'public-key' }
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            userVerification: 'required',
+            residentKey: 'preferred'
+          },
+          timeout: 60000,
+          attestation: 'none'
+        }
+      });
+
+      if (credential) {
+        const credId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+        localStorage.setItem('swipe_passkey_enrolled', 'true');
+        localStorage.setItem('swipe_passkey_id', credId);
+        showToast('Fingerprint passkey enrolled successfully! 🖐️', '✅');
+        const bioBox = $('#mobile-biometric-box');
+        if (bioBox) bioBox.style.display = 'flex';
+        const enrollBtn = $('#btn-biometric-enroll');
+        if (enrollBtn) enrollBtn.textContent = 'Re-enroll Fingerprint Passkey';
+      }
+    } catch (err) {
+      console.warn('[Passkey registration]', err);
+      showToast(`Passkey registration: ${err.message || 'Cancelled'}`, '⚠️');
+    }
+  }
+
+  async function authenticateBiometricPasskey() {
+    const devInfo = checkDeviceAuthorization();
+    if (!devInfo.isMobile) {
+      showToast('Biometric fingerprint is only available on Samsung A55 mobile', 'ℹ️');
+      return;
+    }
+    if (!window.PublicKeyCredential) {
+      showToast('WebAuthn / Passkeys not supported on this browser', '⚠️');
+      return;
+    }
+    try {
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+
+      const credIdStr = localStorage.getItem('swipe_passkey_id');
+      let allowCredentials = [];
+      if (credIdStr) {
+        const rawId = Uint8Array.from(atob(credIdStr), c => c.charCodeAt(0));
+        allowCredentials.push({ id: rawId, type: 'public-key' });
+      }
+
+      const assertion = await navigator.credentials.get({
+        publicKey: {
+          challenge: challenge,
+          rpId: window.location.hostname,
+          userVerification: 'required',
+          allowCredentials: allowCredentials.length > 0 ? allowCredentials : undefined,
+          timeout: 60000
+        }
+      });
+
+      if (assertion) {
+        unlockApp();
+        showToast('Unlocked with Fingerprint! 🖐️', '🎉');
+      }
+    } catch (err) {
+      console.warn('[Passkey authentication]', err);
+      if (err.name !== 'NotAllowedError') {
+        showToast(`Fingerprint auth failed: ${err.message}`, '⚠️');
+      }
+    }
+  }
+
+  function initAppSecurity() {
+    const devInfo = checkDeviceAuthorization();
+    const devStatusText = $('#dev-status-text');
+    const subtitle = $('#lock-screen-subtitle');
+    const unauthBanner = $('#lock-unauthorized-banner');
+    const bioBox = $('#mobile-biometric-box');
+    const settingsPasskeyBtn = $('#btn-settings-passkey');
+
+    if (devStatusText) {
+      devStatusText.textContent = devInfo.authorized ? `Device Verified: ${devInfo.deviceName}` : 'Unauthorized Device';
+    }
+
+    if (!devInfo.authorized) {
+      if (unauthBanner) unauthBanner.style.display = 'block';
+      if (subtitle) subtitle.textContent = 'Access Restricted: Jack\'s PC & Samsung Galaxy A55 Only';
+    } else {
+      if (unauthBanner) unauthBanner.style.display = 'none';
+      if (subtitle) subtitle.textContent = `Verified for ${devInfo.deviceName}`;
+    }
+
+    // Mobile-only biometric fingerprint controls
+    if (devInfo.isMobile) {
+      if (bioBox) bioBox.style.display = 'flex';
+      if (settingsPasskeyBtn) settingsPasskeyBtn.style.display = 'inline-block';
+      const hasEnrolled = localStorage.getItem('swipe_passkey_enrolled') === 'true';
+      const enrollBtn = $('#btn-biometric-enroll');
+      if (enrollBtn && hasEnrolled) {
+        enrollBtn.textContent = 'Re-enroll Fingerprint Passkey';
+      }
+    } else {
+      if (bioBox) bioBox.style.display = 'none';
+      if (settingsPasskeyBtn) settingsPasskeyBtn.style.display = 'none';
+    }
+
+    // Check if session was already unlocked
+    if (isAppUnlocked()) {
+      const lockScreen = $('#app-lock-screen');
+      if (lockScreen) lockScreen.classList.add('unlocked');
+    }
+  }
+
   /* ---------------------------- Initialization & Event Binding ---------------------------- */
 
   async function init() {
+    initAppSecurity();
     document.body.dataset.albumStyle = currentAlbumStyle;
 
     setupAudioListeners();
@@ -2516,14 +2844,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=2.1.2').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=2.1.3').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v2.1.2 installed! Auto-refreshing...');
-                showToast('App updated to v2.1.2! Refreshing...', '🚀');
+                console.log('[PWA] New version v2.1.3 installed! Auto-refreshing...');
+                showToast('App updated to v2.1.3! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
@@ -2658,6 +2986,28 @@ const MobileApp = (() => {
       }
     });
 
+    // App Lock & PIN Keypad Handlers
+    document.querySelectorAll('.pin-key[data-digit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        handlePinDigit(btn.dataset.digit);
+      });
+    });
+
+    $('#btn-pin-backspace')?.addEventListener('click', () => handlePinBackspace());
+    $('#btn-pin-clear')?.addEventListener('click', () => handlePinClear());
+
+    // Lock button in Header & Settings
+    $('#btn-lock-app')?.addEventListener('click', () => lockApp());
+    $('#btn-settings-lock')?.addEventListener('click', () => {
+      closeSettingsModal();
+      lockApp();
+    });
+
+    // Mobile Biometric Fingerprint Passkey Handlers
+    $('#btn-biometric-auth')?.addEventListener('click', () => authenticateBiometricPasskey());
+    $('#btn-biometric-enroll')?.addEventListener('click', () => registerBiometricPasskey());
+    $('#btn-settings-passkey')?.addEventListener('click', () => registerBiometricPasskey());
+
     // Desktop PC Easy-Access Volume Slider & Mute Toggle
     const deskVolSlider = $('#desktop-vol-slider');
     const deskVolLabel = $('#desktop-vol-label');
@@ -2696,8 +3046,23 @@ const MobileApp = (() => {
       });
     }
 
-    // Desktop PC Keyboard Shortcuts (Space: preview, Left: pass, Right: like, Z: undo, 1-5: format)
+    // Keyboard Shortcuts (Physical typing for PIN 1862 when locked; Space, Left, Right, Z, 1-5 when unlocked)
     window.addEventListener('keydown', (e) => {
+      // If locked, capture physical keyboard for PIN 1862 typing
+      if (!isAppUnlocked()) {
+        if (e.key >= '0' && e.key <= '9') {
+          e.preventDefault();
+          handlePinDigit(e.key);
+        } else if (e.key === 'Backspace') {
+          e.preventDefault();
+          handlePinBackspace();
+        } else if (e.key === 'Escape' || e.key === 'c' || e.key === 'C') {
+          e.preventDefault();
+          handlePinClear();
+        }
+        return;
+      }
+
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
       if (e.code === 'Space') {
@@ -2728,6 +3093,10 @@ const MobileApp = (() => {
 
   return {
     init,
+    lockApp,
+    unlockApp,
+    registerBiometricPasskey,
+    authenticateBiometricPasskey,
     loadDeck: (tracks) => {
       deck = tracks;
       currentIndex = 0;
