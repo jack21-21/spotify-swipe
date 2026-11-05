@@ -142,11 +142,11 @@ html, body {
   border: 1px solid var(--border-glass-bright);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  padding: 5px 10px;
+  padding: 5px 9px;
   border-radius: 999px;
   color: #fff;
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 600;
   cursor: pointer;
   max-width: 100%;
@@ -156,7 +156,13 @@ html, body {
 .pl-pill-name {
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 110px;
+  max-width: 145px;
+}
+
+.pl-pill-chevron {
+  opacity: 0.7;
+  font-size: 0.7rem;
+  margin-left: 1px;
 }
 
 .pl-pill-count {
@@ -740,6 +746,28 @@ html, body {
 .sound-wave-bars.playing span:nth-child(3) { animation: soundWave 0.8s 0.3s infinite alternate; }
 .sound-wave-bars.playing span:nth-child(4) { animation: soundWave 0.6s 0.2s infinite alternate; }
 
+.play-spotify-full-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(30, 215, 96, 0.15);
+  border: 1px solid rgba(30, 215, 96, 0.45);
+  color: #1ed760;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 6px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(30, 215, 96, 0.2);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.play-spotify-full-btn:active {
+  transform: scale(0.92);
+  background: rgba(30, 215, 96, 0.35);
+}
+
 @keyframes soundWave {
   from { height: 4px; }
   to { height: 16px; }
@@ -750,7 +778,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 10px;
   padding: 8px 0;
   margin-top: 6px;
   flex-shrink: 0;
@@ -774,9 +802,9 @@ html, body {
 }
 
 .btn-undo {
-  width: 44px;
-  height: 44px;
-  font-size: 1.1rem;
+  width: 42px;
+  height: 42px;
+  font-size: 1.05rem;
   color: #cbd5e1;
 }
 
@@ -786,9 +814,9 @@ html, body {
 }
 
 .btn-pass {
-  width: 58px;
-  height: 58px;
-  font-size: 1.45rem;
+  width: 54px;
+  height: 54px;
+  font-size: 1.4rem;
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.4);
   background: rgba(239, 68, 68, 0.08);
@@ -796,18 +824,32 @@ html, body {
 }
 
 .btn-preview {
-  width: 48px;
-  height: 48px;
+  width: 46px;
+  height: 46px;
   font-size: 1.15rem;
   color: #fbbf24;
   border-color: rgba(251, 191, 36, 0.4);
   background: rgba(251, 191, 36, 0.08);
 }
 
+.btn-spotify-play {
+  width: 46px;
+  height: 46px;
+  color: #1ed760;
+  border-color: rgba(30, 215, 96, 0.4);
+  background: rgba(30, 215, 96, 0.1);
+  box-shadow: 0 4px 16px rgba(30, 215, 96, 0.22);
+}
+
+.spotify-dock-svg {
+  width: 22px;
+  height: 22px;
+}
+
 .btn-like {
-  width: 58px;
-  height: 58px;
-  font-size: 1.45rem;
+  width: 54px;
+  height: 54px;
+  font-size: 1.4rem;
   color: #1ed760;
   border-color: rgba(30, 215, 96, 0.45);
   background: rgba(30, 215, 96, 0.1);
@@ -815,9 +857,9 @@ html, body {
 }
 
 .btn-playlist {
-  width: 44px;
-  height: 44px;
-  font-size: 1.15rem;
+  width: 42px;
+  height: 42px;
+  font-size: 1.1rem;
   color: #38bdf8;
   border-color: rgba(56, 189, 248, 0.35);
 }
@@ -903,6 +945,94 @@ html, body {
   height: 32px;
   border-radius: 50%;
   cursor: pointer;
+}
+
+.drawer-playlist-switch-section {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass-bright);
+  border-radius: 16px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawer-switch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.switch-section-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.drawer-new-pl-toggle {
+  background: none;
+  border: none;
+  color: #1ed760;
+  font-weight: 700;
+  font-size: 0.76rem;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.drawer-dropdown-row {
+  width: 100%;
+}
+
+.drawer-playlist-select {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+.drawer-playlist-select option {
+  background: #11141c;
+  color: #fff;
+}
+
+.drawer-inline-create-box {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.drawer-text-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(var(--accent), 0.5);
+  color: #fff;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.primary-btn-mini {
+  background: linear-gradient(135deg, #1ed760, #169c46);
+  color: #000;
+  border: none;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.78rem;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .drawer-quick-actions {
