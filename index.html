@@ -9,13 +9,13 @@
   <meta name="apple-mobile-web-app-title" content="SpotifySwipe">
   <meta name="description" content="Tinder-style Spotify playlist maker with physical media frames and real music previews">
   
-  <title>Spotify Swipe Mobile</title>
+  <title>Spotify Swipe v1.2.0</title>
   
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest.json?v=1.2.0">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=1.2.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -33,6 +33,7 @@
         <div class="app-logo">
           <img src="icon-192.png" alt="Logo" class="app-logo-icon" />
           <span class="app-title">Swipe</span>
+          <span class="app-version-badge">v1.2.0</span>
         </div>
       </div>
 
@@ -192,6 +193,14 @@
           </div>
         </div>
 
+        <div class="setting-item version-item">
+          <div class="version-row">
+            <span>App Version:</span>
+            <span class="version-tag">v1.2.0</span>
+          </div>
+          <small class="version-desc">Updated Nov 5 • Studio Music Previews & PWA Engine</small>
+        </div>
+
         <div class="modal-footer-actions">
           <button class="danger-btn" id="btn-logout">Log Out of Spotify</button>
         </div>
@@ -209,8 +218,8 @@
   <div id="confetti-container" class="confetti-container"></div>
 
   <!-- Core Scripts -->
-  <script src="theme.js"></script>
-  <script src="audio.js"></script>
-  <script src="app.js"></script>
+  <script src="theme.js?v=1.2.0"></script>
+  <script src="audio.js?v=1.2.0"></script>
+  <script src="app.js?v=1.2.0"></script>
 </body>
 </html>

@@ -131,6 +131,43 @@ html, body {
   color: #fff;
 }
 
+.app-version-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #1ed760;
+  background: rgba(30, 215, 96, 0.15);
+  border: 1px solid rgba(30, 215, 96, 0.4);
+  padding: 1px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+}
+
+.version-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.version-tag {
+  background: rgba(30, 215, 96, 0.2);
+  color: #1ed760;
+  font-weight: 800;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(30, 215, 96, 0.5);
+}
+
+.version-desc {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
 .header-center {
   flex: 1;
   display: flex;

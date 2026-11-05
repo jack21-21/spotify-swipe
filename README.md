@@ -1,79 +1,93 @@
-# 📱 Spotify Swipe — Standalone Mobile App (Zero PC Dependency)
+# Spotify Swipe — Playlist Maker & Physical Media Visualizer
 
-A fully standalone mobile web application and PWA (Progressive Web App) that runs **directly on your phone 24/7 with your computer completely turned off**.
-
----
-
-## ✨ Features on Mobile
-
-- 🔋 **Zero PC Required**: Uses Spotify's official **OAuth 2.0 PKCE** flow directly from your mobile browser — no server, backend, or desktop machine needed.
-- 📱 **Native Home Screen App**: Installable directly on iOS (Safari) and Android (Chrome) as a full-screen app with custom icon and launch screen.
-- 🖐️ **Fluid Mobile Touch Physics**: Natural swipe right (Like & Add to Spotify) and swipe left (Pass) with haptic feedback (`navigator.vibrate`) and color-coded overlay badges.
-- 🎨 **5 Physical Media Formats**:
-  - 🎵 **Picture Disc**: Centered vinyl picture disc with full-bleed album art and rotating spindle.
-  - 💿 **Vinyl LP**: Classic vinyl record sliding out from the sleeve with interactive spinning.
-  - 💽 **CD Jewel Case**: Translucent jewel case with iridescent holographic disc.
-  - 📼 **Cassette Tape**: Retro compact cassette with dual tape spools.
-  - 🖼️ **Picture Frame**: Modern glass art frame.
-- 🌈 **10 Audio-Reactive Visualizers**: Halo, Cyber EQ, Wave, Starfield, Plasma Orb, Matrix Rain, Galaxy, Ribbon, Prism, and Retro Grid.
-- 🦎 **Dynamic Chameleon Palette**: Real-time album cover color extraction that automatically themes the ambient background glow to match the playing song.
-- 🎶 **30s Audio Teaser Bar**: Instant preview audio playback with interactive waveform progress seeking.
-- 📋 **Playlist Management Drawer**:
-  - View all tracks currently in the active playlist.
-  - **1-Tap Duplicate Cleaner**: Detects and removes duplicate songs instantly.
-  - Delete individual songs on the go.
-  - **Open in Spotify App**: Deep links directly to the Spotify mobile app (`spotify:playlist:<id>`).
+A luxury, high-energy **Spotify Swipe** desktop & web application for curating Spotify playlists through card swiping. Built with Apple Liquid Glass and Obsidian aesthetics, dynamic chameleon cover-art color extraction, 10 reactive audio visualizers, realistic physical media formats (Vinyl LP, Holographic CD, Retro Cassette, Picture Frame), full volume controls, and real-time Spotify Web API synchronization.
 
 ---
 
-## 🚀 1-Minute Free Setup (Deploy to Phone)
+## ⚡ Highlights & Features
 
-Because the mobile app is 100% static (HTML, CSS, JS, and client-side PKCE), you can host it for free on any platform so it stays online permanently.
+- **Interactive Swiping Deck**:
+  - Physics-based card drag with tilt rotation, rubber-banding, and dynamic `LIKE` / `NOPE` / `SUPER LIKE` stamps.
+  - **Swipe Right (Like)**: Immediately adds the song to your Spotify playlist in real time.
+  - **Swipe Left (Pass)**: Skips to the next track.
+  - **Undo**: Instantly restores your last swiped track (`Z`).
+  - **Duplicate Prevention**: Automatically scans your selected playlist and your listening library upfront to ensure you never get duplicates.
 
-### Option 1: GitHub Pages (Recommended — Free & Easiest)
-1. Create a repository on GitHub (e.g. `spotify-swipe`).
-2. Upload the files inside this `mobile/` folder (`index.html`, `style.css`, `app.js`, `theme.js`, `audio.js`, `visualizer.js`, `manifest.json`, `icon-192.png`, `icon-512.png`).
-3. Go to **Settings** → **Pages** → Source: **Deploy from a branch** → Branch: `main` → `/ (root)` → **Save**.
-4. GitHub will give you a live HTTPS link:
-   ```
-   https://<your-username>.github.io/spotify-swipe/
-   ```
+- **Realistic Physical Media & Artwork Engine**:
+  - Switch anytime via the quick in-card format pill `[ 💿 | 💽 | 📼 | 🖼️ ]` or the Settings menu:
+    1. **💿 Vinyl Record**: Album jacket with matte sleeve spine, inner mouth shadow, and a 12" vinyl LP that slides out and spins at 33⅓ RPM with concentric grooves and realistic light sheens when playing.
+    2. **💽 Holographic CD**: Clear acrylic jewel case with hinge and sliding compact disc featuring iridescent rainbow diffraction sheen (`conic-gradient`), data tracks, and laser spin reflections.
+    3. **📼 Retro Cassette Tape**: Vintage cassette shell with perimeter corner screws, printed Side-A label customized to the album art, and rotating dual tape spools.
+    4. **🖼️ Picture Frame**: Gallery-grade glass frame with specular bevel and audio-reactive edge glow.
 
-### Option 2: Vercel / Netlify (Drag & Drop)
-1. Go to [vercel.com](https://vercel.com) or [netlify.com](https://netlify.com).
-2. Drag and drop the `mobile` folder.
-3. You will immediately get a live HTTPS URL like `https://spotify-swipe.vercel.app`.
+- **Full Audio & Volume Controls**:
+  - **Master Volume Slider**: Located in the top header with live percentage readout (`0% - 100%`) and one-click mute/unmute toggle (`M`).
+  - **In-Card Volume Slider**: Adjust preview volume directly inside the track preview bar.
+  - **30-Second Audio Teaser**: Smooth fading, animated waveform visualizer, scrubber, and timer readout.
+  - **Stream to Spotify Desktop**: 1-click button (`S`) to send the full-length song directly to your running Spotify desktop app (`PUT /me/player/play`).
+
+- **10 Dynamic Reactive Audio Visualizers**:
+  - Real-time Web Audio API frequency analysis powering 10 custom visualizer engines:
+    1. **Spotlight Halo**: Radial sound ring with particle halo.
+    2. **Cyber EQ**: Equalizer bars with glowing peak indicators.
+    3. **Liquid Wave**: Flowing dual sine audio wave.
+    4. **Cosmic Starfield**: 3D hyperspace warp reacting to bass hits.
+    5. **Plasma Orb**: Solar coronal energy sphere.
+    6. **Cyber Rain**: Matrix code stream responding to mid/treble frequencies.
+    7. **Cosmic Galaxy**: Dual-arm rotating particle vortex.
+    8. **Chroma Ribbon**: 3D silk wavebands undulating with sound.
+    9. **Audio Prism**: Kaleidoscopic geometric prism.
+    10. **Synthwave Grid**: 80s outrun perspective neon grid.
+
+- **Slide-Over Live Playlist Drawer & Management**:
+  - Real-time list of all tracks added to the active playlist with individual track durations.
+  - **1-Click Delete Duplicates**: Instantly scans the active playlist on Spotify and eliminates duplicate songs in one click.
+  - **Single Track Removal**: Click the `✕` button on any track in the drawer to remove it from your Spotify playlist.
+  - **Playlist Swapping Modal**: Switch between existing playlists in your library on the fly without restarting.
+
+- **Dynamic Chameleon Theme Palette**:
+  - Extracts color palettes from album covers on the fly (`ThemeManager`).
+  - Silky-smooth 1.4-second cubic transitions between song themes.
+  - Synchronizes ambient background orbs, visualizer colors, buttons, and glow effects.
+
+- **Windows Desktop Integration**:
+  - Frameless liquid glass window via `pywebview` (with automatic fallback to default browser).
+  - Custom title bar with drag region, minimize, maximize, and close buttons.
+  - Custom Windows taskbar and application icon grouping.
 
 ---
 
-## 🔑 Add Redirect URI to Spotify Developer Dashboard
+## 🎮 Controls & Shortcuts
 
-1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
-2. Click on your application (**Client ID: `2e9d00e15cc44cffaaba76a52f88e10a`**).
-3. Click **Settings** (or Edit Settings).
-4. Under **Redirect URIs**, add your live mobile URL:
-   - For GitHub Pages: `https://<your-username>.github.io/spotify-swipe/`
-   - For Vercel: `https://spotify-swipe.vercel.app/`
-5. Click **Save** at the bottom.
-
-*(Note: If you ever change your Client ID, you can also update it anytime directly inside the mobile app's ⚙️ Settings modal).*
+| Action | Mouse / Gesture | Keyboard |
+| :--- | :--- | :--- |
+| **Pass / Skip** | Drag card left / Click ❌ | `←` or `A` |
+| **Like & Add to Spotify** | Drag card right / Click 💚 | `→` or `D` |
+| **Play / Pause Preview** | Click Teaser Play button / Action circle | `Space` |
+| **Play Full on Spotify App**| Click Spotify Stream button (🎵) | `S` |
+| **Undo Last Swipe** | Click ⏪ button | `Z` |
+| **Mute / Unmute** | Click Volume speaker icon | `M` |
+| **Switch Media Format** | Click `[ 💿 \| 💽 \| 📼 \| 🖼️ ]` on card | — |
+| **Adjust Volume** | Drag Header or Card slider | — |
+| **Open Playlist Drawer** | Click Playlist pill at top-left | — |
 
 ---
 
-## 📲 Install on Your Phone (Full-Screen App)
+## 🚀 Quick Start (Sharing & Running)
 
-Open your live URL on your phone's browser:
+### Requirements
+- **Python 3.9+** ([python.org](https://www.python.org/downloads/)) - *Check "Add Python to PATH" during installation*.
+- Spotify Free or Premium account.
 
-### iPhone / iPad (Safari)
-1. Open the URL in **Safari**.
-2. Tap the **Share** button (the square with an arrow pointing up at the bottom of the screen).
-3. Scroll down and tap **Add to Home Screen**.
-4. Tap **Add** in the top right.
-5. Tap the new **SpotifySwipe** app icon on your home screen — it will open full-screen like a native app!
+### 1-Click Launch (Windows)
+Double-click `start.bat`. It will automatically verify Python, install dependencies if needed, and start the app on `http://127.0.0.1:8888`.
 
-### Android (Chrome)
-1. Open the URL in **Chrome**.
-2. Tap the **Three Dots (⋮)** menu in the top right.
-3. Tap **Add to Home screen** (or **Install app**).
-4. Tap **Install**.
-5. Launch from your home screen or app drawer!
+### Manual CLI Launch
+```powershell
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Run application
+python main.py
+```
+Open [http://127.0.0.1:8888](http://127.0.0.1:8888) in any browser, or enjoy the native frameless window.

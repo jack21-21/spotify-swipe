@@ -1,9 +1,10 @@
 /**
- * Spotify Swipe PWA Service Worker
- * Caches static shell and assets for offline and instant app launching.
+ * Spotify Swipe PWA Service Worker — v1.2.0
+ * Network-First strategy ensures the app always loads the latest code
+ * from GitHub Pages, falling back to cache if offline.
  */
 
-const CACHE_NAME = 'spotify-swipe-v1';
+const CACHE_NAME = 'spotify-swipe-v1.2.0';
 const ASSETS = [
   './',
   './index.html',
@@ -11,15 +12,19 @@ const ASSETS = [
   './app.js',
   './theme.js',
   './audio.js',
-  './visualizer.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS).catch(err => {
+        console.warn('[SW] Cache addAll warning:', err);
+      });
+    })
   );
 });
 
@@ -29,6 +34,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log('[SW] Purging old cache:', key);
             return caches.delete(key);
           }
         })
@@ -38,14 +44,32 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Pass through Spotify API and accounts requests directly to network
-  if (event.request.url.includes('spotify.com') || event.request.url.includes('scdn.co')) {
+  // Never intercept external APIs (Spotify, Apple, Deezer, etc.)
+  if (
+    event.request.url.includes('spotify.com') ||
+    event.request.url.includes('scdn.co') ||
+    event.request.url.includes('itunes.apple.com') ||
+    event.request.url.includes('deezer.com') ||
+    event.request.url.includes('api.fin21.uk')
+  ) {
     return;
   }
 
+  // Network-First for same-origin app files: always get the freshest version from GitHub!
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).catch(() => cached);
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        // Fallback to cache only when offline
+        return caches.match(event.request);
+      })
   );
 });
