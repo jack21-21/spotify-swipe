@@ -303,55 +303,7 @@ html, body {
   height: 14px;
 }
 
-/* ---------------------------- Deck Viewport & Genre Filter ---------------------------- */
-.genre-pill-bar {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  overflow-x: auto;
-  width: 100%;
-  max-width: 480px;
-  padding: 2px 4px 8px 4px;
-  margin: 0 auto 2px auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  z-index: 15;
-}
-
-.genre-pill-bar::-webkit-scrollbar {
-  display: none;
-}
-
-.genre-pill {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: #cbd5e1;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  font-family: inherit;
-}
-
-.genre-pill:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.genre-pill.active {
-  background: #1ed760;
-  color: #000;
-  border-color: #1ed760;
-  font-weight: 800;
-  box-shadow: 0 0 14px rgba(30, 215, 96, 0.4);
-  transform: scale(1.03);
-}
-
+/* ---------------------------- Deck Viewport ---------------------------- */
 .deck-viewport {
   position: relative;
   flex: 1;

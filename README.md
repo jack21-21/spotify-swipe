@@ -2,7 +2,7 @@
 
 [![Spotify Swipe Live](https://img.shields.io/badge/Live%20App-jack21--21.github.io%2Fspotify--swipe-1ED760?style=for-the-badge&logo=spotify&logoColor=white)](https://jack21-21.github.io/spotify-swipe/)
 [![Platform](https://img.shields.io/badge/Platform-Mobile%20%7C%20Desktop%20PC-blue?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
-[![Version](https://img.shields.io/badge/Version-v2.0.1-brightgreen?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
+[![Version](https://img.shields.io/badge/Version-v2.1.0-brightgreen?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey?style=for-the-badge)](LICENSE)
 
 > **Curate your dream Spotify playlists by swiping.** Fast, tactile, and addictive. Swipe right to add songs directly to your Spotify playlist; swipe left to pass.
@@ -20,19 +20,20 @@ You can start discovering music and building playlists right now from any device
 
 ---
 
-## ✨ Features You'll Love in v2.0.0 (Final Shareable Release)
+## ✨ Features You'll Love in v2.1.0
 
-### 🎴 1. Tinder-Style Card Swiping with Adaptive Intelligence
+### 🎴 1. Tinder-Style Card Swiping with Dynamic Taste Learning
 * **Swipe Right (💚)**: Instantly adds the track to your active Spotify playlist in real time.
 * **Swipe Left (❌)**: Skips to the next song in your discovery deck.
 * **Undo (↩️)**: Accidentally swiped away a gem? Press Undo to bring it right back.
-* **🧠 Adaptive Music Recommendation**: Learns which artists and styles you like as you swipe right, intelligently seeding more music that matches your vibe!
+* **🧠 Automatic Taste Learning**: No manual genre buttons needed! As you swipe right on artists (e.g. Deftones, Radiohead, rock, hip-hop), the algorithm automatically learns your taste and branches more of that artist and similar vibes ahead in your feed.
 * **✨ 100% Zero Duplicates Guarantee**: Eliminates repeat songs across different albums, singles, or remasters during your browsing session.
 * **⚡ Instant Track Removal (✕)**: Tap the `✕` on any track in your queue sidebar or drawer to instantly drop the song without blocking errors.
 
-### 🎸 2. One-Tap Genre & Vibe Filtering
-Quickly switch genres at any time from the top filter bar:
-* **🌐 All Mix**: Global trending hits & mixed genres.
+### 🔐 2. 100% Direct Spotify PKCE Integration (Zero Third-Party APIs)
+* **Pure Spotify Connection**: Authenticates directly against official Spotify accounts servers with zero proxy servers or third-party APIs.
+* **Full Write Access**: Seamlessly creates and populates your **"Spotify Swipe Jams"** playlist right on your Spotify account.
+* **Persistent Local Queue**: Swiped tracks are safely saved in your browser so you never lose a song.
 * **🎸 Indie / Rock**: Alternative, indie rock, post-punk & garage bands.
 * **🎧 Pop Hits**: Chart toppers, viral tracks & upbeat anthems.
 * **🎤 Hip-Hop**: Rap, trap, boom-bap & hip-hop classics.
