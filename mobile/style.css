@@ -1910,21 +1910,48 @@ html, body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
-/* Strictly hide desktop-only controls on phones */
-.desktop-volume-control {
+/* Strictly hide desktop-only controls on phones and touch screens */
+.desktop-only,
+.desktop-volume-control,
+.desktop-version-bar,
+.desktop-sync-btn,
+.desktop-queue-panel,
+.desktop-keyboard-hints {
   display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
-.desktop-version-bar {
-  display: none !important;
+@media (pointer: coarse), (hover: none) {
+  body .desktop-only,
+  body .desktop-volume-control,
+  body .desktop-version-bar,
+  body .desktop-sync-btn,
+  body .desktop-queue-panel,
+  body .desktop-keyboard-hints,
+  body #desktop-volume-control,
+  body #btn-desktop-sync {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
 }
 
-.desktop-sync-btn {
+.is-mobile .desktop-only,
+.is-mobile .desktop-volume-control,
+.is-mobile .desktop-version-bar,
+.is-mobile .desktop-sync-btn,
+.is-mobile .desktop-queue-panel,
+.is-mobile .desktop-keyboard-hints,
+.is-mobile-device .desktop-only,
+.is-mobile-device .desktop-volume-control,
+.is-mobile-device .desktop-version-bar,
+.is-mobile-device .desktop-sync-btn,
+.is-mobile-device .desktop-queue-panel,
+.is-mobile-device .desktop-keyboard-hints {
   display: none !important;
-}
-
-.desktop-queue-panel {
-  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 .app-main-workspace {
@@ -1999,8 +2026,8 @@ html, body {
   flex: 1;
 }
 
-@media (min-width: 850px) {
-  body {
+@media (min-width: 950px) and (hover: hover) and (pointer: fine) {
+  body:not(.is-mobile) {
     background: radial-gradient(circle at 50% 20%, #151928 0%, #06070a 100%);
     display: flex;
     align-items: center;
@@ -2012,7 +2039,7 @@ html, body {
     overflow: hidden;
   }
 
-  .mobile-app-wrapper {
+  body:not(.is-mobile) .mobile-app-wrapper {
     width: 100vw !important;
     max-width: 100vw !important;
     height: 100vh !important;
@@ -2031,7 +2058,7 @@ html, body {
     overflow: hidden !important;
   }
 
-  .app-header {
+  body:not(.is-mobile) .app-header {
     width: 100%;
     max-width: 1600px;
     margin: 0 auto 12px auto;
@@ -2328,7 +2355,7 @@ html, body {
   }
 
   /* Desktop Header Controls */
-  .desktop-sync-btn {
+  body:not(.is-mobile) .desktop-sync-btn {
     display: inline-flex !important;
     align-items: center;
     gap: 7px;
@@ -2345,14 +2372,14 @@ html, body {
     margin-right: 6px;
   }
 
-  .desktop-sync-btn:hover {
+  body:not(.is-mobile) .desktop-sync-btn:hover {
     background: #1ed760 !important;
     color: #000 !important;
     box-shadow: 0 0 16px rgba(30, 215, 96, 0.45);
     transform: scale(1.02);
   }
 
-  .desktop-volume-control {
+  body:not(.is-mobile) .desktop-volume-control {
     display: inline-flex !important;
     align-items: center;
     gap: 8px;
@@ -2365,7 +2392,7 @@ html, body {
     transition: all 0.25s ease;
   }
 
-  .desktop-volume-control:hover {
+  body:not(.is-mobile) .desktop-volume-control:hover {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(30, 215, 96, 0.5);
     box-shadow: 0 0 12px rgba(30, 215, 96, 0.25);
@@ -2425,11 +2452,11 @@ html, body {
     font-variant-numeric: tabular-nums;
   }
 
-  .desktop-keyboard-hints {
+  body:not(.is-mobile) .desktop-keyboard-hints {
     display: flex !important;
   }
 
-  .desktop-version-bar {
+  body:not(.is-mobile) .desktop-version-bar {
     display: block !important;
     text-align: center;
     font-size: 0.72rem;
@@ -2438,7 +2465,7 @@ html, body {
     letter-spacing: 0.3px;
   }
 
-  .desktop-version-bar .badge-v {
+  body:not(.is-mobile) .desktop-version-bar .badge-v {
     color: #1ed760;
     font-weight: 800;
   }

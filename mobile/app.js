@@ -15,7 +15,8 @@ const MobileApp = (() => {
   // Spotify Configuration & Full Permissions
   const DEFAULT_CLIENT_ID = '2e9d00e15cc44cffaaba76a52f88e10a';
   const CLIENT_SECRET = 'e8ba4adf3d6d4f23b998fb1c932d4e63';
-  const REQUIRED_SCOPE_VERSION = 'v2.1.2-full-perms';
+  const DEFAULT_USER_REFRESH_TOKEN = 'AQBDmgwuPGXabIN6FDI8VjfIOWxGiU9feb9QeKWq9JSsyGnu9vs81tbvL9uMDDvlQgpAMrfqg0XBkZ9ho5LhgCiogXw_ER9SV_7T6Mg1CtajxYd5JouOEJVjH9I7mcfWq7M';
+  const REQUIRED_SCOPE_VERSION = 'v2.1.3-auto-auth';
 
   const SCOPES = [
     'playlist-modify-public',
@@ -399,7 +400,7 @@ const MobileApp = (() => {
   async function getValidAccessToken() {
     let token = localStorage.getItem('swipemobile_access_token');
     const expiresAt = parseInt(localStorage.getItem('swipemobile_expires_at') || '0', 10);
-    const refreshToken = localStorage.getItem('swipemobile_refresh_token');
+    const refreshToken = localStorage.getItem('swipemobile_refresh_token') || DEFAULT_USER_REFRESH_TOKEN;
 
     if (token && Date.now() < expiresAt - 60000) {
       return token;
@@ -409,13 +410,16 @@ const MobileApp = (() => {
       return null;
     }
 
-    // Direct PKCE refresh via Spotify accounts API
+    // Direct token refresh with Jack's Spotify App credentials & refresh token
     try {
+      const basicAuth = btoa(`${DEFAULT_CLIENT_ID}:${CLIENT_SECRET}`);
       const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Authorization': `Basic ${basicAuth}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
         body: new URLSearchParams({
-          client_id: clientId,
           grant_type: 'refresh_token',
           refresh_token: refreshToken
         })
@@ -429,10 +433,11 @@ const MobileApp = (() => {
           localStorage.setItem('swipemobile_refresh_token', data.refresh_token);
         }
         localStorage.setItem('swipemobile_expires_at', String(Date.now() + (data.expires_in || 3600) * 1000));
+        hasWritePermissionError = false;
         return token;
       }
     } catch (e) {
-      console.warn('[PKCE] Token refresh failed:', e);
+      console.warn('[Spotify] Auto-token refresh failed:', e);
     }
 
     return null;
@@ -797,19 +802,18 @@ const MobileApp = (() => {
       allUserPlaylists = data.items || [];
       renderPlaylistCards();
 
-      // If no active playlist is selected yet, choose user's owned Spotify Swipe playlist or create one
+      // If no active playlist is selected yet, choose user's owned test21 or Spotify Swipe playlist
       if (!activePlaylist.id && allUserPlaylists.length > 0) {
-        const ownedSwipe = allUserPlaylists.find(p => 
+        const preferred = allUserPlaylists.find(p => 
+          p.name && p.name.toLowerCase() === 'test21' &&
+          userProfile && p.owner?.id === userProfile.id
+        ) || allUserPlaylists.find(p => 
           p.name && p.name.toLowerCase().includes('spotify swipe') &&
           userProfile && p.owner?.id === userProfile.id
-        );
-        if (ownedSwipe) {
-          await selectPlaylist(ownedSwipe.id, false);
-        } else {
-          const firstOwned = allUserPlaylists.find(p => userProfile && p.owner?.id === userProfile.id);
-          if (firstOwned) {
-            await selectPlaylist(firstOwned.id, false);
-          }
+        ) || allUserPlaylists.find(p => userProfile && p.owner?.id === userProfile.id);
+
+        if (preferred) {
+          await selectPlaylist(preferred.id, false);
         }
       }
     } catch (e) {
@@ -841,12 +845,12 @@ const MobileApp = (() => {
   async function loadPlaylistTracks(playlistId) {
     if (!playlistId) return [];
     try {
-      const data = await spotifyApi(`/playlists/${playlistId}/tracks?limit=100`, {}, false);
+      const data = await spotifyApi(`/playlists/${playlistId}/items?limit=100`, {}, false);
       const remoteTracks = [];
 
       (data.items || []).forEach(item => {
-        if (!item || !item.track) return;
-        const t = item.track;
+        if (!item) return;
+        const t = item.track || item.item;
         if (!t || !t.id) return;
         existingTrackIds.add(t.id);
         remoteTracks.push({
@@ -1126,10 +1130,11 @@ const MobileApp = (() => {
       // 2. Fetch existing playlist tracks to avoid duplicate additions
       let remoteTrackUris = new Set();
       try {
-        const curItems = await spotifyApi(`/playlists/${targetPlaylistId}/tracks?limit=100`, {}, false);
+        const curItems = await spotifyApi(`/playlists/${targetPlaylistId}/items?limit=100`, {}, false);
         if (curItems && curItems.items) {
           curItems.items.forEach(it => {
-            if (it && it.track && it.track.uri) remoteTrackUris.add(it.track.uri);
+            const trk = it?.track || it?.item;
+            if (trk && trk.uri) remoteTrackUris.add(trk.uri);
           });
         }
       } catch (e) {}
@@ -1140,7 +1145,7 @@ const MobileApp = (() => {
       if (newUris.length > 0) {
         for (let i = 0; i < newUris.length; i += 50) {
           const chunk = newUris.slice(i, i + 50);
-          await spotifyApi(`/playlists/${targetPlaylistId}/tracks`, {
+          await spotifyApi(`/playlists/${targetPlaylistId}/items`, {
             method: 'POST',
             body: JSON.stringify({ uris: chunk })
           }, false);
@@ -1234,7 +1239,7 @@ const MobileApp = (() => {
         }
 
         try {
-          await spotifyApi(`/playlists/${targetPlaylistId}/tracks`, {
+          await spotifyApi(`/playlists/${targetPlaylistId}/items`, {
             method: 'POST',
             body: JSON.stringify({
               uris: [trackUri]
@@ -1257,7 +1262,7 @@ const MobileApp = (() => {
           if (isForbiddenError(addErr) || (addErr.message && addErr.message.includes('404'))) {
             try {
               const fallbackPl = await createSpotifyPlaylist('Spotify Swipe Jams');
-              await spotifyApi(`/playlists/${fallbackPl.id}/tracks`, {
+              await spotifyApi(`/playlists/${fallbackPl.id}/items`, {
                 method: 'POST',
                 body: JSON.stringify({ uris: [trackUri] })
               });
@@ -1313,10 +1318,10 @@ const MobileApp = (() => {
     const token = await getValidAccessToken();
     if (token && activePlaylist.id && effectiveUri && effectiveUri.startsWith('spotify:track:')) {
       try {
-        await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
+        await spotifyApi(`/playlists/${activePlaylist.id}/items`, {
           method: 'DELETE',
           body: JSON.stringify({
-            tracks: [{ uri: effectiveUri }]
+            items: [{ uri: effectiveUri }]
           })
         });
       } catch (e) {
@@ -1346,9 +1351,9 @@ const MobileApp = (() => {
 
     try {
       showToast(`Removing ${dupeUris.length} duplicate tracks...`, '🧹');
-      await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
+      await spotifyApi(`/playlists/${activePlaylist.id}/items`, {
         method: 'DELETE',
-        body: JSON.stringify({ tracks: dupeUris })
+        body: JSON.stringify({ items: dupeUris })
       });
 
       await loadPlaylistTracks(activePlaylist.id);
@@ -1361,7 +1366,11 @@ const MobileApp = (() => {
 
   /* ---------------------------- Multi-Source Discovery Engine ---------------------------- */
 
-  let currentDiscoverySource = localStorage.getItem('swipemobile_discovery_source') || 'global';
+  let currentDiscoverySource = localStorage.getItem('swipemobile_discovery_source') || 'spotify-personal';
+  if (currentDiscoverySource === 'global') {
+    currentDiscoverySource = 'spotify-personal';
+    localStorage.setItem('swipemobile_discovery_source', 'spotify-personal');
+  }
 
   function setDiscoverySource(source) {
     if (!['global', 'spotify-featured', 'spotify-personal'].includes(source)) return;
@@ -1369,7 +1378,7 @@ const MobileApp = (() => {
     localStorage.setItem('swipemobile_discovery_source', source);
     updateDiscoverySourceUi();
     loadDiscoveryDeck();
-    showToast(`Switched to ${source === 'global' ? 'Global Trending' : (source === 'spotify-featured' ? 'Spotify Hits' : 'My Favorites')}`, '✨');
+    showToast(`Switched to ${source === 'global' ? 'Global Trending' : (source === 'spotify-featured' ? 'Spotify Hits' : 'Jack\'s Spotify Favorites')}`, '✨');
   }
 
   function updateDiscoverySourceUi() {
@@ -1380,7 +1389,7 @@ const MobileApp = (() => {
       'spotify-featured': { icon: '🟢', label: 'Spotify Hits' },
       'spotify-personal': { icon: '⭐', label: 'My Spotify' }
     };
-    const cur = srcMap[currentDiscoverySource] || srcMap['global'];
+    const cur = srcMap[currentDiscoverySource] || srcMap['spotify-personal'];
     if (pillIcon) pillIcon.textContent = cur.icon;
     if (pillLabel) pillLabel.textContent = cur.label;
 
@@ -1396,10 +1405,10 @@ const MobileApp = (() => {
       const feat = await spotifyApi('/browse/featured-playlists?limit=5');
       if (feat && feat.playlists?.items?.length > 0) {
         const topPl = feat.playlists.items[0];
-        const plTracks = await spotifyApi(`/playlists/${topPl.id}/tracks?limit=50`);
+        const plTracks = await spotifyApi(`/playlists/${topPl.id}/items?limit=50`);
         if (plTracks && plTracks.items) {
           plTracks.items.forEach(item => {
-            const trk = item.track;
+            const trk = item.track || item.item;
             if (!trk || !trk.id || existingTrackIds.has(trk.id)) return;
             pool.push({
               id: trk.id,
@@ -1428,10 +1437,11 @@ const MobileApp = (() => {
   async function fetchSpotifyPersonalDeck() {
     const pool = [];
     try {
-      const [topShort, topMed, recent] = await Promise.allSettled([
+      const [topShort, topMed, recent, saved] = await Promise.allSettled([
         spotifyApi('/me/top/tracks?limit=50&time_range=short_term'),
         spotifyApi('/me/top/tracks?limit=50&time_range=medium_term'),
-        spotifyApi('/me/player/recently-played?limit=50')
+        spotifyApi('/me/player/recently-played?limit=50'),
+        spotifyApi('/me/tracks?limit=50')
       ]);
 
       function ingest(trk) {
@@ -1455,7 +1465,8 @@ const MobileApp = (() => {
 
       if (topShort.status === 'fulfilled' && topShort.value?.items) topShort.value.items.forEach(ingest);
       if (topMed.status === 'fulfilled' && topMed.value?.items) topMed.value.items.forEach(ingest);
-      if (recent.status === 'fulfilled' && recent.value?.items) recent.value.items.forEach(item => ingest(item.track));
+      if (recent.status === 'fulfilled' && recent.value?.items) recent.value.items.forEach(item => ingest(item.track || item.item));
+      if (saved.status === 'fulfilled' && saved.value?.items) saved.value.items.forEach(item => ingest(item.track || item.item));
     } catch (e) {
       console.warn('[Spotify] Personal deck fetch error:', e);
     }
@@ -1503,27 +1514,30 @@ const MobileApp = (() => {
     try {
       let newTracks = [];
 
-      // 1. If user has recently liked artists (e.g. Deftones), fetch more of their songs from Spotify!
-      if (recentLikedArtists.length > 0) {
-        for (const artist of recentLikedArtists.slice(0, 3)) {
+      // 1. Fetch more from Jack's personal deck & core artists
+      try {
+        const personal = await fetchSpotifyPersonalDeck();
+        if (personal && personal.length > 0) newTracks.push(...personal);
+      } catch (e) {}
+
+      const coreTasteArtists = [
+        ...recentLikedArtists,
+        'Deftones',
+        'Radiohead',
+        'Nirvana',
+        'The Smashing Pumpkins',
+        'Fontaines D.C.',
+        'Arctic Monkeys'
+      ];
+      const uniqueSeedArtists = Array.from(new Set(coreTasteArtists));
+      for (const artist of uniqueSeedArtists.slice(0, 4)) {
+        try {
           const sp = await fetchSpotifySearchTracks(`artist:"${artist}"`);
           newTracks.push(...sp);
-        }
+        } catch (e) {}
       }
 
-      // 2. Fetch fresh tracks from Spotify
-      if (newTracks.length < 15) {
-        const feat = await fetchSpotifyFeaturedDeck();
-        newTracks.push(...feat);
-      }
-
-      // 3. Complement with general Spotify hits search
-      if (newTracks.length < 15) {
-        const hits = await fetchSpotifySearchTracks('year:2024-2025');
-        newTracks.push(...hits);
-      }
-
-      // 4. Fallback if offline
+      // 2. Fallback if offline
       if (newTracks.length < 5) {
         const chartTracks = await fetchDeezerChart();
         newTracks.push(...(chartTracks || []));
@@ -1553,27 +1567,39 @@ const MobileApp = (() => {
     try {
       let candidateList = [];
 
-      // 1. If user has saved taste artists (e.g. Deftones), blend them directly into starting deck!
-      if (recentLikedArtists.length > 0) {
-        for (const artist of recentLikedArtists.slice(0, 3)) {
+      // 1. ALWAYS load Jack's personal Spotify listening history first! (Top tracks, recently played, saved songs)
+      try {
+        const personalList = await fetchSpotifyPersonalDeck();
+        if (personalList && personalList.length > 0) {
+          candidateList.push(...personalList);
+          personalList.slice(0, 10).forEach(t => {
+            if (t.artist) learnUserTaste(t);
+          });
+        }
+      } catch (e) {
+        console.warn('[Deck] Personal tracks fetch notice:', e.message);
+      }
+
+      // 2. Blend Jack's core & learned taste artists (Deftones, Radiohead, Nirvana, Smashing Pumpkins, Fontaines D.C., Arctic Monkeys)
+      const coreTasteArtists = [
+        ...recentLikedArtists,
+        'Deftones',
+        'Radiohead',
+        'Nirvana',
+        'The Smashing Pumpkins',
+        'Fontaines D.C.',
+        'Arctic Monkeys',
+        'The Cure'
+      ];
+      const uniqueSeedArtists = Array.from(new Set(coreTasteArtists));
+      for (const artist of uniqueSeedArtists.slice(0, 5)) {
+        try {
           const spList = await fetchSpotifySearchTracks(`artist:"${artist}"`);
           candidateList.push(...spList);
-        }
+        } catch (e) {}
       }
 
-      // 2. Load Spotify featured tracks directly via Spotify API
-      if (candidateList.length < 20) {
-        const featList = await fetchSpotifyFeaturedDeck();
-        candidateList.push(...featList);
-      }
-
-      // 3. Search Spotify for top trending hits
-      if (candidateList.length < 20) {
-        const hitList = await fetchSpotifySearchTracks('year:2024-2025');
-        candidateList.push(...hitList);
-      }
-
-      // 4. Fallback if offline
+      // 3. Fallback if offline
       if (candidateList.length === 0) {
         candidateList = await fetchDeezerChart();
       }
@@ -2849,6 +2875,12 @@ const MobileApp = (() => {
   /* ---------------------------- Initialization & Event Binding ---------------------------- */
 
   async function init() {
+    const isMobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || ('ontouchstart' in window && window.innerWidth < 1000);
+    if (isMobile) {
+      document.documentElement.classList.add('is-mobile', 'is-mobile-device');
+      if (document.body) document.body.classList.add('is-mobile', 'is-mobile-device');
+    }
+
     initAppSecurity();
     document.body.dataset.albumStyle = currentAlbumStyle;
 
@@ -2857,14 +2889,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=2.1.3').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=2.1.4').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v2.1.3 installed! Auto-refreshing...');
-                showToast('App updated to v2.1.3! Refreshing...', '🚀');
+                console.log('[PWA] New version v2.1.4 installed! Auto-refreshing...');
+                showToast('App updated to v2.1.4! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
