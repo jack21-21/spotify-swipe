@@ -63,6 +63,11 @@ const MobileApp = (() => {
   let existingTrackIds = new Set();
   let allUserPlaylists = [];
 
+  // Session deduplication & Adaptive recommendation
+  const sessionSeenTrackKeys = new Set();
+  const likedArtists = new Set();
+  let currentGenre = localStorage.getItem('swipemobile_genre') || 'all';
+
   let deck = [];
   let currentIndex = 0;
   let history = [];
@@ -81,6 +86,64 @@ const MobileApp = (() => {
 
   // Audio Preview Cache
   const previewCache = new Map();
+
+  /* ---------------------------- Deduplication & Adaptive Music Intelligence ---------------------------- */
+
+  function getTrackKey(track) {
+    if (!track) return '';
+    const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanTitle = (track.name || '')
+      .toLowerCase()
+      .replace(/\s*-\s*(remastered|remaster|deluxe|radio edit|bonus track|single version).*/i, '')
+      .replace(/\(.*?\)/g, '')
+      .replace(/\[.*?\]/g, '')
+      .trim();
+    const primaryArtist = (track.artist || '').split(/[,&]/)[0].trim();
+    return `${norm(cleanTitle)}::${norm(primaryArtist)}`;
+  }
+
+  function isDuplicateTrack(track) {
+    if (!track) return true;
+    if (track.id && existingTrackIds.has(track.id)) return true;
+    const key = getTrackKey(track);
+    if (key && (sessionSeenTrackKeys.has(key) || sessionSeenTrackKeys.has(track.id))) return true;
+    return false;
+  }
+
+  function markTrackSeen(track) {
+    if (!track) return;
+    if (track.id) sessionSeenTrackKeys.add(track.id);
+    const key = getTrackKey(track);
+    if (key) sessionSeenTrackKeys.add(key);
+  }
+
+  function getGenreDisplayName(g) {
+    const map = {
+      all: 'All Mix',
+      indie: 'Indie / Rock',
+      pop: 'Pop Hits',
+      hiphop: 'Hip-Hop',
+      dance: 'Dance / Electronic',
+      chill: 'Chill Vibes'
+    };
+    return map[g] || g;
+  }
+
+  function updateGenreUi() {
+    $$('.genre-pill').forEach(pill => {
+      const g = pill.dataset.genre || 'all';
+      pill.classList.toggle('active', g === currentGenre);
+    });
+  }
+
+  function setGenre(genre) {
+    if (!genre) return;
+    currentGenre = genre;
+    localStorage.setItem('swipemobile_genre', genre);
+    updateGenreUi();
+    loadDiscoveryDeck();
+    showToast(`Filtering: ${getGenreDisplayName(genre)}`, '🎵');
+  }
 
   /* ---------------------------- PKCE Auth Helper ---------------------------- */
 
@@ -372,7 +435,18 @@ const MobileApp = (() => {
     });
   }
 
-  function fetchDeezerChart() {
+  function fetchDeezerChart(genre = currentGenre) {
+    const genreMap = {
+      all: 0,
+      indie: 85,
+      rock: 152,
+      pop: 132,
+      hiphop: 116,
+      dance: 113,
+      chill: 85
+    };
+    const chartId = genreMap[genre] !== undefined ? genreMap[genre] : 0;
+
     return new Promise((resolve) => {
       const cbName = 'dz_chart_' + Math.random().toString(36).substring(2, 9);
       const script = document.createElement('script');
@@ -401,6 +475,7 @@ const MobileApp = (() => {
             preview_url: t.preview,
             duration_ms: (t.duration || 30) * 1000,
             spotify_url: null,
+            genre: genre,
             plays: Math.floor(Math.random() * 45) + 20,
             bpm: Math.floor(Math.random() * 35) + 110
           }));
@@ -415,7 +490,7 @@ const MobileApp = (() => {
         resolve([]);
       };
 
-      script.src = `https://api.deezer.com/chart/0/tracks?limit=50&output=jsonp&callback=${cbName}`;
+      script.src = `https://api.deezer.com/chart/${chartId}/tracks?limit=50&output=jsonp&callback=${cbName}`;
       document.head.appendChild(script);
     });
   }
@@ -697,21 +772,66 @@ const MobileApp = (() => {
     return newPl;
   }
 
-  async function getOrCreateDefaultSwipePlaylist() {
-    if (!userProfile) await loadUserProfile();
-    if (allUserPlaylists.length === 0) await loadUserPlaylists();
+  async function ensureEditablePlaylist() {
+    const token = await getValidAccessToken();
+    if (!token) return null;
 
-    const existing = allUserPlaylists.find(p => 
-      p.name.toLowerCase().includes('spotify swipe') && 
-      (p.owner?.id === userProfile?.id || !p.owner)
-    );
+    if (!userProfile) await loadUserProfile().catch(() => {});
 
-    if (existing) {
-      await selectPlaylist(existing.id, false);
-      return existing;
+    // 1. Verify if current activePlaylist is valid and writable
+    if (activePlaylist.id) {
+      try {
+        const pl = await spotifyApi(`/playlists/${activePlaylist.id}?fields=id,name,owner,collaborative,external_urls`);
+        if (pl && pl.id) {
+          const isOwner = !userProfile || (pl.owner && pl.owner.id === userProfile.id);
+          if (isOwner || pl.collaborative) {
+            activePlaylist.id = pl.id;
+            activePlaylist.name = pl.name;
+            activePlaylist.owner = pl.owner;
+            activePlaylist.collaborative = pl.collaborative;
+            activePlaylist.url = pl.external_urls?.spotify;
+            saveActivePlaylistMeta();
+            return activePlaylist.id;
+          }
+        }
+      } catch (checkErr) {
+        console.warn('[Playlist check] Existing playlist invalid or inaccessible:', checkErr.message);
+      }
     }
 
-    return await createSpotifyPlaylist('Spotify Swipe Jams');
+    // 2. Search for any existing user-owned "Spotify Swipe" playlist
+    if (allUserPlaylists.length === 0) {
+      await loadUserPlaylists().catch(() => {});
+    }
+
+    const ownedSwipe = allUserPlaylists.find(p => 
+      p.name && p.name.toLowerCase().includes('spotify swipe') &&
+      (!userProfile || p.owner?.id === userProfile.id)
+    );
+    if (ownedSwipe) {
+      await selectPlaylist(ownedSwipe.id, false);
+      return ownedSwipe.id;
+    }
+
+    // 3. Fallback to any user-owned playlist
+    const anyOwned = allUserPlaylists.find(p => !userProfile || p.owner?.id === userProfile.id);
+    if (anyOwned) {
+      await selectPlaylist(anyOwned.id, false);
+      return anyOwned.id;
+    }
+
+    // 4. Create new dedicated playlist
+    try {
+      const created = await createSpotifyPlaylist('Spotify Swipe Jams');
+      return created.id;
+    } catch (createErr) {
+      console.warn('[Playlist creation failed]', createErr.message);
+      return null;
+    }
+  }
+
+  async function getOrCreateDefaultSwipePlaylist() {
+    return await ensureEditablePlaylist();
   }
 
   async function syncAllToSpotify() {
@@ -729,8 +849,10 @@ const MobileApp = (() => {
 
     showToast(`Syncing ${activePlaylist.tracks.length} tracks to Spotify...`, '⏳');
     try {
-      if (!activePlaylist.id || (activePlaylist.owner && activePlaylist.owner.id !== userProfile?.id)) {
-        await getOrCreateDefaultSwipePlaylist();
+      const targetPlaylistId = await ensureEditablePlaylist();
+      if (!targetPlaylistId) {
+        showToast('Saved songs in local queue! Connect Spotify to create playlist.', '💚');
+        return;
       }
 
       // Ensure any missing Spotify URIs from global charts are resolved
@@ -759,7 +881,7 @@ const MobileApp = (() => {
       try {
         for (let i = 0; i < uris.length; i += 50) {
           const chunk = uris.slice(i, i + 50);
-          await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
+          await spotifyApi(`/playlists/${targetPlaylistId}/tracks`, {
             method: 'POST',
             body: JSON.stringify({ uris: chunk })
           });
@@ -767,8 +889,8 @@ const MobileApp = (() => {
         showToast(`Synced ${uris.length} tracks to Spotify "${activePlaylist.name}"!`, '🎉');
         vibrate(50);
       } catch (addErr) {
-        if (isForbiddenError(addErr)) {
-          showToast('Selected playlist is read-only. Auto-syncing to your "Spotify Swipe Jams"...', 'ℹ️');
+        if (isForbiddenError(addErr) || (addErr.message && addErr.message.includes('404'))) {
+          showToast('Selected playlist is not editable. Auto-syncing to your "Spotify Swipe Jams"...', 'ℹ️');
           const fallbackPl = await createSpotifyPlaylist('Spotify Swipe Jams');
           for (let i = 0; i < uris.length; i += 50) {
             const chunk = uris.slice(i, i + 50);
@@ -809,6 +931,11 @@ const MobileApp = (() => {
     renderDesktopQueue();
     vibrate(30);
 
+    // Adaptive music learning: register liked artist
+    if (track.artist) {
+      likedArtists.add(track.artist.split(/[,&]/)[0].trim());
+    }
+
     const token = await getValidAccessToken();
     if (!token) {
       triggerError('ERR_AUTH_001', `Saved in queue! Connect Spotify to sync to your account.`);
@@ -816,12 +943,8 @@ const MobileApp = (() => {
     }
 
     try {
-      // Ensure we target an editable playlist owned by the user
-      if (!activePlaylist.id || (activePlaylist.owner && userProfile && activePlaylist.owner.id !== userProfile.id && !activePlaylist.collaborative)) {
-        await getOrCreateDefaultSwipePlaylist();
-      }
-
-      if (activePlaylist.id) {
+      const targetPlaylistId = await ensureEditablePlaylist();
+      if (targetPlaylistId) {
         let trackUri = track.uri || (track.id && !track.id.startsWith('demo-') && !track.id.startsWith('dz-') ? `spotify:track:${track.id}` : null);
         
         // If track is from global chart, search Spotify to find its real Spotify URI!
@@ -844,7 +967,7 @@ const MobileApp = (() => {
         }
 
         try {
-          await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
+          await spotifyApi(`/playlists/${targetPlaylistId}/tracks`, {
             method: 'POST',
             body: JSON.stringify({
               uris: [trackUri]
@@ -853,7 +976,7 @@ const MobileApp = (() => {
           showToast(`Added "${track.name}" to Spotify "${activePlaylist.name}"!`, '💚');
           return true;
         } catch (addErr) {
-          if (isForbiddenError(addErr)) {
+          if (isForbiddenError(addErr) || (addErr.message && addErr.message.includes('404'))) {
             const fallbackPl = await createSpotifyPlaylist('Spotify Swipe Jams');
             await spotifyApi(`/playlists/${fallbackPl.id}/tracks`, {
               method: 'POST',
@@ -873,6 +996,11 @@ const MobileApp = (() => {
       } else {
         triggerError('ERR_SPOTIFY_403', `Spotify sync notice: ${e.message}`);
       }
+      return false;
+    }
+
+    return true;
+  }
       return false;
     }
 
@@ -1049,6 +1177,86 @@ const MobileApp = (() => {
     return pool;
   }
 
+  async function fetchSpotifyGenreDeck(genre = currentGenre) {
+    const pool = [];
+    const queries = {
+      all: 'year:2024-2025',
+      indie: 'genre:indie OR genre:"indie rock" OR genre:alternative',
+      pop: 'genre:pop',
+      hiphop: 'genre:"hip hop" OR genre:rap',
+      dance: 'genre:dance OR genre:edm OR genre:house',
+      chill: 'genre:chill OR genre:lo-fi OR genre:acoustic'
+    };
+
+    let q = queries[genre] || queries.all;
+    if (likedArtists.size > 0) {
+      const topArtists = Array.from(likedArtists).slice(-3);
+      const artistQuery = topArtists.map(a => `artist:"${a}"`).join(' OR ');
+      q = `(${q}) OR (${artistQuery})`;
+    }
+
+    try {
+      const res = await spotifyApi(`/search?q=${encodeURIComponent(q)}&type=track&limit=50`);
+      if (res && res.tracks?.items) {
+        res.tracks.items.forEach(trk => {
+          if (!trk || !trk.id || isDuplicateTrack(trk)) return;
+          pool.push({
+            id: trk.id,
+            uri: trk.uri,
+            name: trk.name,
+            artist: trk.artists?.map(a => a.name).join(', ') || 'Unknown Artist',
+            album: trk.album?.name || '',
+            year: trk.album?.release_date ? trk.album.release_date.split('-')[0] : '',
+            total_tracks: trk.album?.total_tracks || 1,
+            cover_url: trk.album?.images?.[0]?.url || '',
+            preview_url: trk.preview_url,
+            duration_ms: trk.duration_ms,
+            spotify_url: trk.external_urls?.spotify,
+            genre: genre,
+            plays: Math.floor(Math.random() * 45) + 12,
+            bpm: Math.floor(Math.random() * 40) + 105
+          });
+        });
+      }
+    } catch (e) {
+      console.warn('[Spotify] Genre search error:', e);
+    }
+    return pool;
+  }
+
+  let isReplenishing = false;
+  async function replenishDeckIfNeeded() {
+    if (isReplenishing) return;
+    const remaining = deck.length - currentIndex;
+    if (remaining > 6) return;
+
+    isReplenishing = true;
+    try {
+      const token = await getValidAccessToken();
+      let newTracks = [];
+      if (token && (currentDiscoverySource !== 'global' || likedArtists.size > 0)) {
+        newTracks = await fetchSpotifyGenreDeck(currentGenre);
+      }
+      if (!newTracks || newTracks.length === 0) {
+        newTracks = await fetchDeezerChart(currentGenre);
+      }
+
+      const freshTracks = (newTracks || []).filter(t => !isDuplicateTrack(t));
+      freshTracks.forEach(t => {
+        markTrackSeen(t);
+        deck.push(t);
+      });
+
+      if (freshTracks.length > 0) {
+        prefetchPreviewsForDeck();
+      }
+    } catch (e) {
+      console.warn('[Deck] Replenish error:', e);
+    } finally {
+      isReplenishing = false;
+    }
+  }
+
   async function loadDiscoveryDeck() {
     if (isLoadingDeck) return;
     isLoadingDeck = true;
@@ -1064,9 +1272,15 @@ const MobileApp = (() => {
         candidateList = await fetchSpotifyPersonalDeck();
       }
 
+      // If user selected a specific genre or personal/featured had few matches:
+      if (currentGenre !== 'all' && token && candidateList.length < 15) {
+        const genreList = await fetchSpotifyGenreDeck(currentGenre);
+        candidateList = candidateList.concat(genreList);
+      }
+
       // If source is 'global' or Spotify endpoints gave empty / not authenticated:
       if (!candidateList || candidateList.length === 0) {
-        candidateList = await fetchDeezerChart();
+        candidateList = await fetchDeezerChart(currentGenre);
       }
 
       // If still empty (e.g. offline), fallback to demo tracks
@@ -1075,8 +1289,11 @@ const MobileApp = (() => {
         return;
       }
 
-      // Deduplicate against active playlist
-      candidateList = candidateList.filter(t => !existingTrackIds.has(t.id));
+      // 100% Strict Deduplication against active playlist & session-seen tracks
+      candidateList = candidateList.filter(t => !isDuplicateTrack(t));
+
+      // Mark all candidates as seen in this session
+      candidateList.forEach(t => markTrackSeen(t));
 
       // Shuffle
       for (let i = candidateList.length - 1; i > 0; i--) {
@@ -1100,9 +1317,10 @@ const MobileApp = (() => {
       }
     } catch (err) {
       console.error('[Deck] Failed to load deck:', err);
-      const fallbackList = await fetchDeezerChart();
+      const fallbackList = await fetchDeezerChart(currentGenre);
       if (fallbackList && fallbackList.length > 0) {
-        deck = fallbackList;
+        deck = fallbackList.filter(t => !isDuplicateTrack(t));
+        deck.forEach(t => markTrackSeen(t));
         currentIndex = 0;
         history = [];
         renderCards();
@@ -1314,6 +1532,7 @@ const MobileApp = (() => {
     }
 
     currentIndex++;
+    replenishDeckIfNeeded();
     setTimeout(async () => {
       if (currentIndex < deck.length && !deck[currentIndex].preview_url) {
         await resolvePreviewUrl(deck[currentIndex]);
@@ -2008,14 +2227,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=1.2.5').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=2.0.0').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v1.2.5 installed! Auto-refreshing...');
-                showToast('App updated to v1.2.5! Refreshing...', '🚀');
+                console.log('[PWA] New version v2.0.0 installed! Auto-refreshing...');
+                showToast('App updated to v2.0.0! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
@@ -2026,6 +2245,7 @@ const MobileApp = (() => {
 
     loadSavedActivePlaylist();
     updateDiscoverySourceUi();
+    updateGenreUi();
     bindDomEvents();
 
     await handleOAuthCallback();
@@ -2053,6 +2273,14 @@ const MobileApp = (() => {
     $('#btn-undo')?.addEventListener('click', () => undoLastSwipe());
     $('#btn-preview-toggle')?.addEventListener('click', () => handlePreviewButtonClick());
     $('#btn-dock-spotify')?.addEventListener('click', () => playFullTrackOnSpotify(deck[currentIndex]));
+
+    // Genre & Vibe Discovery Filter Bar
+    $$('.genre-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        const g = pill.dataset.genre || 'all';
+        setGenre(g);
+      });
+    });
 
     // Discovery Source Toggle & Selectors
     $('#btn-source-toggle')?.addEventListener('click', () => openPlaylistSelectorSheet());
@@ -2239,7 +2467,8 @@ const MobileApp = (() => {
     handlePreviewButtonClick,
     selectPlaylist,
     syncAllToSpotify,
-    renderDesktopQueue
+    renderDesktopQueue,
+    setGenre
   };
 })();
 

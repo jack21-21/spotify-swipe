@@ -2,7 +2,7 @@
 
 [![Spotify Swipe Live](https://img.shields.io/badge/Live%20App-jack21--21.github.io%2Fspotify--swipe-1ED760?style=for-the-badge&logo=spotify&logoColor=white)](https://jack21-21.github.io/spotify-swipe/)
 [![Platform](https://img.shields.io/badge/Platform-Mobile%20%7C%20Desktop%20PC-blue?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
-[![Version](https://img.shields.io/badge/Version-v1.2.5-brightgreen?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
+[![Version](https://img.shields.io/badge/Version-v2.0.0-brightgreen?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey?style=for-the-badge)](LICENSE)
 
 > **Curate your dream Spotify playlists by swiping.** Fast, tactile, and addictive. Swipe right to add songs directly to your Spotify playlist; swipe left to pass.
@@ -20,38 +20,52 @@ You can start discovering music and building playlists right now from any device
 
 ---
 
-## ✨ Features You'll Love
+## ✨ Features You'll Love in v2.0.0 (Final Shareable Release)
 
-### 🎴 1. Tinder-Style Card Swiping
+### 🎴 1. Tinder-Style Card Swiping with Adaptive Intelligence
 * **Swipe Right (💚)**: Instantly adds the track to your active Spotify playlist in real time.
 * **Swipe Left (❌)**: Skips to the next song in your discovery deck.
 * **Undo (↩️)**: Accidentally swiped away a gem? Press Undo to bring it right back.
-* **Automatic Discovery Engine**: Pulls from your personal top tracks, recently played songs, and Spotify's recommendation algorithms.
-* **Demo Mode**: No Spotify account? No problem! Explore with built-in preview tracks without logging in.
+* **🧠 Adaptive Music Recommendation**: Learns which artists and styles you like as you swipe right, intelligently seeding more music that matches your vibe!
+* **✨ 100% Zero Duplicates Guarantee**: Eliminates repeat songs across different albums, singles, or remasters during your browsing session.
+* **⚡ Instant Track Removal (✕)**: Tap the `✕` on any track in your queue sidebar or drawer to instantly drop the song without blocking errors.
 
-### 💿 2. Realistic Physical Media Artwork
+### 🎸 2. One-Tap Genre & Vibe Filtering
+Quickly switch genres at any time from the top filter bar:
+* **🌐 All Mix**: Global trending hits & mixed genres.
+* **🎸 Indie / Rock**: Alternative, indie rock, post-punk & garage bands.
+* **🎧 Pop Hits**: Chart toppers, viral tracks & upbeat anthems.
+* **🎤 Hip-Hop**: Rap, trap, boom-bap & hip-hop classics.
+* **⚡ Dance**: Electronic, house, techno & EDM club anthems.
+* **🌙 Chill**: Lo-fi, ambient, acoustic & relaxing study beats.
+
+### 🛡️ 3. Auto-Recovering Spotify Sync (Zero 403 & 404 Errors)
+* **Intelligent Playlist Verification**: Detects if your selected playlist is read-only or invalid.
+* **Seamless Auto-Fallback**: If a playlist cannot be edited, Spotify Swipe automatically routes tracks to your owned **"Spotify Swipe Jams"** playlist so you never lose a song.
+* **1-Click Sync**: "Sync to Spotify" pushes all queued songs in batch chunks of 50.
+
+### 💿 4. Realistic Physical Media Artwork
 Flip between dynamic physical media formats with one click or tap:
 * **💿 Vinyl LP**: Album jacket with real 33⅓ RPM rotating vinyl and realistic light sheen reflections.
 * **💽 Holographic CD**: Clear jewel case with iridescent rainbow laser sheen compact disc sliding out.
 * **📼 Retro Cassette Tape**: Vintage audio cassette with rotating tape spools and printed label.
 * **🖼️ Picture Frame**: Gallery-grade border with audio-reactive edge glow.
 
-### 🎧 3. Studio Audio Previews & Deep Linking
+### 🎧 5. Studio Audio Previews & Deep Linking
 * **High-Fidelity Previews**: 30-second studio audio teasers powered by Apple Music and Deezer with strict title and artist verification.
 * **Open in Spotify**: Instant 1-tap playback of the full song in your Spotify app.
 * **Battery & Performance Optimized**: Heavy canvas visualizers are automatically disabled on phones to keep scrolling fluid and save battery.
 
-### 💻 4. Dedicated Full-Screen PC Experience
+### 💻 6. Dedicated Full-Screen PC Experience
 * **Full-Width Workspace**: Expands to take advantage of widescreen monitors.
 * **Live Playlist Sidebar**: Watch your playlist grow in real time with album art, track counts, and total playback duration.
-* **1-Click Sync**: "Sync to Spotify" button to batch push all queued tracks to your account.
-* **Header Volume Slider**: Quick, zero-friction volume control (`0% - 100%`) with one-click mute.
+* **Header Volume Slider**: Quick, zero-friction volume control (`0% - 100%`) with one-click mute (strictly hidden on phones).
 * **Keyboard Hotkeys**:
   * `→` or `D`: Like & Add to Spotify
   * `←` or `A`: Pass / Skip
   * `Space`: Play / Pause Preview
   * `Z`: Undo Last Swipe
-  * `M`: Mute / Unmute Audio
+  * `1` - `5`: Switch Physical Media Format (Vinyl, CD, Cassette, Frame)
 
 ---
 
