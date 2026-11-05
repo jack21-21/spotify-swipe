@@ -1,6 +1,7 @@
 /**
  * Spotify Swipe Mobile — Audio Preview Engine & Frequency Analyser
- * Robust mobile audio player with Web Audio API fallback for mobile Safari/Chrome.
+ * Robust mobile audio player with pre-buffering, user gesture unlocking,
+ * and built-in synthesizer fallback for mobile browsers (Android / iOS).
  */
 
 'use strict';
@@ -11,22 +12,15 @@ const AudioManager = (() => {
   audio.preload = 'auto';
 
   let audioCtx = null;
-  let analyser = null;
-  let sourceNode = null;
-  let gainNode = null;
-  let isConnected = false;
+  let synthOsc = null;
+  let synthGain = null;
+  let synthInterval = null;
 
-  const freqData = new Uint8Array(128);
   let currentTrack = null;
   let isPlaying = false;
   let isMuted = false;
   let volume = 0.85;
 
-  let fadeInterval = null;
-  let beatPulse = 0;
-  let lastBass = 0;
-
-  // Listeners
   const onTimeUpdateCallbacks = [];
   const onStateChangeCallbacks = [];
 
@@ -34,55 +28,27 @@ const AudioManager = (() => {
   let isUnlocked = false;
   function unlockMobileAudio() {
     if (isUnlocked) return;
-    initAudioContext();
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtxClass && !audioCtx) {
+      audioCtx = new AudioCtxClass();
+    }
     if (audioCtx && audioCtx.state === 'suspended') {
       audioCtx.resume();
     }
-    // Play a tiny silent buffer
-    if (audioCtx) {
-      try {
-        const buffer = audioCtx.createBuffer(1, 1, 22050);
-        const source = audioCtx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioCtx.destination);
-        source.start(0);
-      } catch (e) {}
-    }
+    // Prime HTML5 Audio element with an empty silent buffer
+    try {
+      audio.play().catch(() => {});
+      audio.pause();
+    } catch (e) {}
+
     isUnlocked = true;
   }
 
+  // Bind to any user touch
   window.addEventListener('touchstart', unlockMobileAudio, { once: true, passive: true });
   window.addEventListener('click', unlockMobileAudio, { once: true, passive: true });
+  window.addEventListener('pointerdown', unlockMobileAudio, { once: true, passive: true });
 
-  function initAudioContext() {
-    if (!audioCtx) {
-      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtxClass) {
-        audioCtx = new AudioCtxClass();
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.82;
-
-        gainNode = audioCtx.createGain();
-        gainNode.gain.value = volume;
-
-        try {
-          sourceNode = audioCtx.createMediaElementSource(audio);
-          sourceNode.connect(analyser);
-          analyser.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
-          isConnected = true;
-        } catch (e) {
-          console.warn('[Audio] MediaElementSource direct connection skipped (using synthetic fallback if needed):', e);
-        }
-      }
-    }
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-  }
-
-  // Audio element events
   audio.addEventListener('play', () => {
     isPlaying = true;
     notifyStateChange();
@@ -90,6 +56,7 @@ const AudioManager = (() => {
 
   audio.addEventListener('pause', () => {
     isPlaying = false;
+    stopSynthFallback();
     notifyStateChange();
   });
 
@@ -106,93 +73,84 @@ const AudioManager = (() => {
   });
 
   audio.addEventListener('error', (e) => {
-    console.warn('[Audio] Playback error on source:', audio.src, e);
+    console.warn('[Audio] Source playback failed, using synth preview fallback:', e);
+    startSynthFallback();
   });
 
   function notifyStateChange() {
     onStateChangeCallbacks.forEach(cb => cb(isPlaying, currentTrack));
   }
 
+  /**
+   * Plays track audio preview immediately.
+   */
   function playTrack(track, autoPlay = true) {
     unlockMobileAudio();
     currentTrack = track;
+    stopSynthFallback();
 
     if (!track.preview_url) {
-      console.warn('[Audio] No preview URL for track:', track.name);
-      audio.pause();
-      audio.src = '';
-      isPlaying = false;
-      notifyStateChange();
+      if (autoPlay) {
+        startSynthFallback();
+      }
       return;
     }
 
     audio.src = track.preview_url;
     audio.currentTime = 0;
+    audio.volume = isMuted ? 0 : volume;
 
     if (autoPlay) {
-      fadeInAndPlay();
-    }
-  }
-
-  function fadeInAndPlay() {
-    if (fadeInterval) clearInterval(fadeInterval);
-    audio.volume = 0;
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.then(() => {
-        isPlaying = true;
-        notifyStateChange();
-        let v = 0;
-        fadeInterval = setInterval(() => {
-          v += 0.12;
-          if (v >= volume) {
-            audio.volume = isMuted ? 0 : volume;
-            clearInterval(fadeInterval);
-          } else {
-            audio.volume = isMuted ? 0 : v;
-          }
-        }, 30);
-      }).catch(err => {
-        console.log('[Audio] Auto-play was restricted on mobile:', err);
-        isPlaying = false;
-        notifyStateChange();
-      });
+      const p = audio.play();
+      if (p !== undefined) {
+        p.then(() => {
+          isPlaying = true;
+          notifyStateChange();
+        }).catch(err => {
+          console.warn('[Audio] Browser restricted autoplay, falling back to synth preview:', err);
+          startSynthFallback();
+        });
+      }
     }
   }
 
   function togglePlayPause() {
     unlockMobileAudio();
-    if (!audio.src || !currentTrack) return;
     if (isPlaying) {
-      audio.pause();
+      pause();
     } else {
-      audio.play().then(() => {
-        isPlaying = true;
-        notifyStateChange();
-      }).catch(() => {});
+      resume();
     }
   }
 
   function pause() {
     audio.pause();
+    stopSynthFallback();
     isPlaying = false;
     notifyStateChange();
   }
 
   function resume() {
     unlockMobileAudio();
-    if (audio.src) {
-      audio.play().catch(() => {});
+    if (currentTrack && currentTrack.preview_url) {
+      audio.src = currentTrack.preview_url;
+      audio.play().then(() => {
+        isPlaying = true;
+        notifyStateChange();
+      }).catch(err => {
+        console.warn('[Audio] Resume blocked:', err);
+        startSynthFallback();
+      });
+    } else {
+      startSynthFallback();
     }
   }
 
   function setVolume(val) {
     volume = Math.max(0, Math.min(1, val));
     audio.volume = isMuted ? 0 : volume;
-    if (gainNode) {
-      try {
-        gainNode.gain.value = isMuted ? 0 : volume;
-      } catch (e) {}
+    if (synthGain) {
+      synthGain.gain.value = volume * 0.15;
     }
   }
 
@@ -201,65 +159,67 @@ const AudioManager = (() => {
     audio.currentTime = Math.max(0, Math.min(dur, progress * dur));
   }
 
-  function getAudioData() {
-    if (isConnected && analyser && isPlaying) {
-      analyser.getByteFrequencyData(freqData);
-    } else if (isPlaying) {
-      // Synthetic reactive wave generation for mobile when analyserNode is blocked by CORS or quiet
-      const now = performance.now() * 0.003;
-      const bpm = currentTrack ? (currentTrack.bpm || 120) : 120;
-      const beatFreq = (bpm / 60) * Math.PI * 2;
-      const beat = (Math.sin(performance.now() * 0.001 * beatFreq) + 1) * 0.5;
+  /**
+   * Melodic synth preview fallback using Web Audio API when streaming audio is blocked
+   */
+  function startSynthFallback() {
+    unlockMobileAudio();
+    stopSynthFallback();
+    if (!audioCtx) return;
 
-      for (let i = 0; i < 128; i++) {
-        const wave = Math.sin(now * 1.5 + i * 0.12) * 45;
-        const sub = Math.cos(now * 0.8 + i * 0.05) * 35;
-        const dynamicVal = 60 + wave + sub + (i < 20 ? beat * 110 : beat * 40);
-        freqData[i] = Math.max(0, Math.min(255, dynamicVal));
-      }
-    } else {
-      // Idle gentle float
-      const now = performance.now() * 0.001;
-      for (let i = 0; i < 128; i++) {
-        const idle = Math.sin(now * 0.8 + i * 0.08) * 16 + 22;
-        freqData[i] = Math.max(0, Math.min(255, idle));
-      }
+    isPlaying = true;
+    notifyStateChange();
+
+    try {
+      synthGain = audioCtx.createGain();
+      synthGain.gain.value = volume * 0.14;
+      synthGain.connect(audioCtx.destination);
+
+      const notes = [220, 261.63, 293.66, 329.63, 392, 440];
+      let step = 0;
+      let startTime = audioCtx.currentTime;
+
+      synthInterval = setInterval(() => {
+        if (!isPlaying) {
+          stopSynthFallback();
+          return;
+        }
+
+        const osc = audioCtx.createOscillator();
+        const noteGain = audioCtx.createGain();
+        const freq = notes[step % notes.length];
+        step++;
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+        noteGain.gain.setValueAtTime(synthGain.gain.value, audioCtx.currentTime);
+        noteGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+
+        osc.connect(noteGain);
+        noteGain.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.38);
+
+        // Update progress callback
+        const elapsed = (audioCtx.currentTime - startTime) % 30;
+        onTimeUpdateCallbacks.forEach(cb => cb(elapsed, 30, elapsed / 30));
+      }, 400);
+    } catch (e) {
+      console.warn('[Audio] Synth fallback error:', e);
     }
+  }
 
-    // Frequency band averages
-    let bSum = 0, mSum = 0, tSum = 0;
-    const bEnd = 16;
-    const mEnd = 64;
-    const tEnd = 120;
-
-    for (let i = 0; i < bEnd; i++) bSum += freqData[i];
-    for (let i = bEnd; i < mEnd; i++) mSum += freqData[i];
-    for (let i = mEnd; i < tEnd; i++) tSum += freqData[i];
-
-    const bass = (bSum / bEnd) / 255;
-    const mid = (mSum / (mEnd - bEnd)) / 255;
-    const treb = (tSum / (tEnd - mEnd)) / 255;
-    const energy = (bass * 0.5) + (mid * 0.35) + (treb * 0.15);
-
-    if (bass > 0.65 && (bass - lastBass) > 0.1) {
-      beatPulse = 1.0;
-    } else {
-      beatPulse *= 0.88;
+  function stopSynthFallback() {
+    if (synthInterval) {
+      clearInterval(synthInterval);
+      synthInterval = null;
     }
-    lastBass = bass;
-
-    return {
-      frequencies: freqData,
-      bass,
-      mid,
-      treb,
-      energy,
-      beatPulse
-    };
   }
 
   return {
-    init: initAudioContext,
+    init: unlockMobileAudio,
     playTrack,
     togglePlay: togglePlayPause,
     togglePlayPause,
@@ -267,7 +227,6 @@ const AudioManager = (() => {
     resume,
     setVolume,
     seek,
-    getAudioData,
     isPlaying: () => isPlaying,
     getCurrentTrack: () => currentTrack,
     onTimeUpdate: (cb) => onTimeUpdateCallbacks.push(cb),

@@ -1,9 +1,9 @@
 /**
- * Spotify Swipe Mobile — Main Application Controller & Swiping Engine
- * Standalone Mobile PWA: runs 100% in mobile browser/home-screen with NO PC NEEDED!
- * Uses Spotify OAuth 2.0 PKCE directly with Spotify Web API.
- * Includes iTunes preview audio fallback engine (solves missing Spotify preview_urls)
- * and direct Spotify full song playback / deep-linking.
+ * Spotify Swipe Mobile — Application Controller & Swiping Engine
+ * Standalone Mobile PWA: 100% phone-native, zero PC needed!
+ * Tailored for mobile screens (Samsung A55 / modern smartphones).
+ * Direct Spotify PKCE Auth, iTunes preview audio pre-fetcher,
+ * and 5 physical media formats (including CD disc and Cassette reels).
  */
 
 'use strict';
@@ -12,7 +12,7 @@ const MobileApp = (() => {
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  // --- Spotify PKCE Configuration ---
+  // Spotify PKCE Configuration
   const DEFAULT_CLIENT_ID = '2e9d00e15cc44cffaaba76a52f88e10a';
   const SCOPES = [
     'user-read-private',
@@ -46,7 +46,6 @@ const MobileApp = (() => {
 
   let currentAlbumStyle = localStorage.getItem('swipemobile_album_style') || 'record';
   let autoPlayPreviews = localStorage.getItem('swipemobile_auto_preview') !== 'false';
-  let visualizer = null;
 
   // Touch physics state
   let isDragging = false;
@@ -56,7 +55,7 @@ const MobileApp = (() => {
   let currentY = 0;
   let activeCardEl = null;
 
-  // Audio Preview Cache (stores resolved 30s preview URLs)
+  // Audio Preview Cache
   const previewCache = new Map();
 
   /* ---------------------------- PKCE Auth Helper ---------------------------- */
@@ -109,7 +108,7 @@ const MobileApp = (() => {
     const error = params.get('error');
 
     if (error) {
-      showToast(`Spotify login error: ${error}`, '⚠️');
+      showToast(`Login error: ${error}`, '⚠️');
       window.history.replaceState({}, document.title, window.location.pathname);
       return;
     }
@@ -228,11 +227,8 @@ const MobileApp = (() => {
     showToast('Logged out of Spotify.', '👋');
   }
 
-  /* ---------------------------- Audio Preview & Spotify Full Playback ---------------------------- */
+  /* ---------------------------- Audio Preview & Pre-fetcher ---------------------------- */
 
-  /**
-   * Resolves audio preview URL: uses Spotify preview if exists, or queries iTunes Search API for 30s stream
-   */
   async function resolvePreviewUrl(track) {
     if (!track) return null;
     if (track.preview_url) return track.preview_url;
@@ -269,44 +265,42 @@ const MobileApp = (() => {
     return null;
   }
 
-  async function prepareTrackAudio(track, autoPlay = false) {
-    if (!track) return;
-    if (!track.preview_url) {
-      const pUrl = await resolvePreviewUrl(track);
-      if (pUrl && deck[currentIndex]?.id === track.id) {
-        AudioManager.playTrack(track, autoPlay && autoPlayPreviews);
+  /**
+   * Pre-fetches preview audio for upcoming cards so play is instantaneous on mobile
+   */
+  async function prefetchPreviewsForDeck() {
+    const batch = deck.slice(currentIndex, currentIndex + 6);
+    for (const trk of batch) {
+      if (!trk.preview_url) {
+        resolvePreviewUrl(trk);
       }
-    } else {
-      AudioManager.playTrack(track, autoPlay && autoPlayPreviews);
     }
   }
 
-  async function handlePreviewButtonClick() {
+  function handlePreviewButtonClick() {
     AudioManager.unlockMobileAudio();
     const track = deck[currentIndex];
     if (!track) return;
 
     if (AudioManager.isPlaying()) {
       AudioManager.pause();
-      return;
-    }
-
-    if (!track.preview_url) {
-      showToast('Finding audio preview...', '🔍');
-      const pUrl = await resolvePreviewUrl(track);
-      if (pUrl) {
-        AudioManager.playTrack(track, true);
-        showToast(`Playing preview: "${track.name}"`, '▶️');
-      } else {
-        showToast('No 30s preview available. Tap Spotify for full song!', 'ℹ️');
-      }
     } else {
-      AudioManager.playTrack(track, true);
+      if (track.preview_url) {
+        AudioManager.playTrack(track, true);
+      } else {
+        // Start immediately on tap so mobile user gesture token is not lost
+        AudioManager.playTrack(track, true);
+        resolvePreviewUrl(track).then(pUrl => {
+          if (pUrl && deck[currentIndex]?.id === track.id && AudioManager.isPlaying()) {
+            AudioManager.playTrack(track, true);
+          }
+        });
+      }
     }
   }
 
   /**
-   * Plays the full song on Spotify: attempts Spotify Connect remote playback, and deep-links to native Spotify mobile app
+   * Plays the full song on Spotify
    */
   async function playFullTrackOnSpotify(track) {
     if (!track) track = deck[currentIndex];
@@ -336,7 +330,7 @@ const MobileApp = (() => {
     }
 
     if (!remoteStarted) {
-      showToast(`Opening "${track.name}" in Spotify app...`, '🟢');
+      showToast(`Opening "${track.name}" in Spotify...`, '🟢');
       window.location.href = track.uri || `spotify:track:${track.id}`;
       setTimeout(() => {
         if (track.spotify_url) window.open(track.spotify_url, '_blank');
@@ -346,8 +340,8 @@ const MobileApp = (() => {
 
   function openActivePlaylistInSpotify() {
     if (!activePlaylist.id) {
-      showToast('Please select a playlist first!', '⚠️');
-      openPlaylistDrawer();
+      showToast('Select a playlist first!', '⚠️');
+      openPlaylistSelectorSheet();
       return;
     }
     showToast(`Opening "${activePlaylist.name}" in Spotify...`, '🟢');
@@ -377,7 +371,7 @@ const MobileApp = (() => {
     try {
       const data = await spotifyApi('/me/playlists?limit=50');
       allUserPlaylists = data.items || [];
-      populatePlaylistSelects();
+      renderPlaylistCards();
 
       // If no active playlist is selected yet, default to first owned playlist
       if (!activePlaylist.id && allUserPlaylists.length > 0) {
@@ -401,7 +395,7 @@ const MobileApp = (() => {
     activePlaylist.url = pl.external_urls?.spotify;
     saveActivePlaylistMeta();
     updatePlaylistStatsUi();
-    populatePlaylistSelects();
+    renderPlaylistCards();
 
     await loadPlaylistTracks(pl.id);
 
@@ -446,7 +440,7 @@ const MobileApp = (() => {
 
   async function createSpotifyPlaylist(name) {
     if (!userProfile) await loadUserProfile();
-    if (!userProfile) throw new Error('Please login to create playlists.');
+    if (!userProfile) throw new Error('Please login with Spotify to create playlists.');
 
     let newPl;
     try {
@@ -479,13 +473,12 @@ const MobileApp = (() => {
     updatePlaylistStatsUi();
 
     await loadUserPlaylists();
-    populatePlaylistSelects();
     return newPl;
   }
 
   async function addTrackToSpotifyPlaylist(track) {
     if (existingTrackIds.has(track.id)) {
-      showToast(`"${track.name}" is already in playlist!`, 'ℹ️');
+      showToast(`"${track.name}" already in playlist!`, 'ℹ️');
       return false;
     }
 
@@ -556,7 +549,7 @@ const MobileApp = (() => {
     });
 
     if (dupeUris.length === 0) {
-      showToast('No duplicates found in playlist!', '✨');
+      showToast('No duplicates in playlist!', '✨');
       return;
     }
 
@@ -569,7 +562,7 @@ const MobileApp = (() => {
 
       await loadPlaylistTracks(activePlaylist.id);
       renderDrawerTracks();
-      showToast(`Removed duplicates! Playlist clean.`, '✅');
+      showToast(`Removed duplicates! Playlist is clean.`, '✅');
     } catch (e) {
       showToast(`Deduplicate failed: ${e.message}`, '⚠️');
     }
@@ -587,7 +580,6 @@ const MobileApp = (() => {
       if (!token) {
         showLoading(false);
         isLoadingDeck = false;
-        openSetupModal();
         return;
       }
 
@@ -632,7 +624,6 @@ const MobileApp = (() => {
         recent.value.items.forEach(item => ingest(item.track));
       }
 
-      // Shuffle deck randomly
       let candidateList = Array.from(poolMap.values());
       for (let i = candidateList.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -645,9 +636,10 @@ const MobileApp = (() => {
 
       renderCards();
       updateButtonStates();
+      prefetchPreviewsForDeck();
 
-      if (deck.length > 0) {
-        prepareTrackAudio(deck[0], autoPlayPreviews);
+      if (deck.length > 0 && autoPlayPreviews) {
+        AudioManager.playTrack(deck[0], true);
       }
     } catch (err) {
       console.error('[Deck] Failed to load deck:', err);
@@ -772,9 +764,10 @@ const MobileApp = (() => {
     setTimeout(() => {
       renderCards();
       updateButtonStates();
-      if (currentIndex < deck.length) {
-        prepareTrackAudio(deck[currentIndex], autoPlayPreviews);
-      } else {
+      prefetchPreviewsForDeck();
+      if (currentIndex < deck.length && autoPlayPreviews) {
+        AudioManager.playTrack(deck[currentIndex], true);
+      } else if (currentIndex >= deck.length) {
         AudioManager.pause();
       }
     }, 280);
@@ -791,12 +784,14 @@ const MobileApp = (() => {
 
     renderCards();
     updateButtonStates();
-    prepareTrackAudio(deck[currentIndex], autoPlayPreviews);
+    if (autoPlayPreviews) {
+      AudioManager.playTrack(deck[currentIndex], true);
+    }
     showToast(`Undid swipe for "${last.track.name}"`, '↩️');
     vibrate(20);
   }
 
-  /* ---------------------------- Card Rendering ---------------------------- */
+  /* ---------------------------- Card Rendering (5 Physical Media Formats) ---------------------------- */
 
   function renderCards() {
     const container = $('#card-deck');
@@ -809,7 +804,7 @@ const MobileApp = (() => {
         <div class="empty-deck-card glass-panel">
           <div class="empty-icon">🎉</div>
           <h3>You're All Caught Up!</h3>
-          <p>You've swiped through all available recommendations.</p>
+          <p>You've swiped through all available songs.</p>
           <div class="empty-actions">
             <button class="primary-btn" id="btn-reload-deck">🎲 Shuffle & Discover More</button>
             <button class="secondary-btn" id="btn-view-playlist-empty">🎵 View Playlist</button>
@@ -843,7 +838,7 @@ const MobileApp = (() => {
             <span>Spotify</span>
           </button>
 
-          <!-- Format selector -->
+          <!-- 5 Format toggles -->
           <div class="media-format-pill">
             <button class="media-toggle-btn ${currentAlbumStyle === 'record' ? 'active' : ''}" data-format="record" title="Picture Disc">🎵</button>
             <button class="media-toggle-btn ${currentAlbumStyle === 'vinyl' ? 'active' : ''}" data-format="vinyl" title="Vinyl LP">💿</button>
@@ -857,18 +852,80 @@ const MobileApp = (() => {
           </div>
         </div>
 
-        <!-- Physical Album Stage -->
+        <!-- Physical Album Stage (5 Fully-Fledged Styles) -->
         <div class="album-stage" data-media="${currentAlbumStyle}">
-          <div class="media-container media-${currentAlbumStyle}">
-            <div class="vinyl-disc">
-              <div class="vinyl-grooves"></div>
-              <div class="vinyl-center-label" style="background-image: url('${track.cover_url || ''}');"></div>
-            </div>
-            <div class="album-cover-wrapper">
-              <img src="${track.cover_url || ''}" alt="${track.name}" class="album-art-img" draggable="false" />
-              <div class="format-overlay"></div>
+          
+          <!-- 1. Picture Disc Record -->
+          <div class="physical-record">
+            <div class="record-disc">
+              <img src="${track.cover_url || ''}" alt="" class="record-art-img" draggable="false" />
+              <div class="record-grooves"></div>
+              <div class="record-spindle-hole"></div>
             </div>
           </div>
+
+          <!-- 2. Vinyl LP in Jacket -->
+          <div class="physical-vinyl">
+            <div class="vinyl-jacket">
+              <img src="${track.cover_url || ''}" alt="" class="jacket-art-img" draggable="false" />
+              <div class="jacket-spine"></div>
+              <div class="jacket-sheen"></div>
+            </div>
+            <div class="vinyl-lp-disc">
+              <div class="vinyl-groove-rings"></div>
+              <div class="vinyl-center-label" style="background-image: url('${track.cover_url || ''}');"></div>
+            </div>
+          </div>
+
+          <!-- 3. CD Jewel Case & Holographic Disc -->
+          <div class="physical-cd">
+            <div class="cd-jewel-case">
+              <img src="${track.cover_url || ''}" alt="" class="cd-booklet-img" draggable="false" />
+              <div class="cd-case-spine"></div>
+              <div class="cd-case-reflection"></div>
+            </div>
+            <div class="cd-holographic-disc">
+              <div class="cd-holo-sheen"></div>
+              <div class="cd-center-clear-ring">
+                <div class="cd-spindle"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Retro Cassette Tape -->
+          <div class="physical-cassette">
+            <div class="cassette-body">
+              <div class="screw s-tl"></div><div class="screw s-tr"></div>
+              <div class="screw s-bl"></div><div class="screw s-br"></div>
+              
+              <div class="cassette-label-card">
+                <img src="${track.cover_url || ''}" alt="" class="cassette-art-thumb" />
+                <div class="cassette-label-text">
+                  <div class="c-title">${escapeHtml(track.name)}</div>
+                  <div class="c-artist">${escapeHtml(track.artist)}</div>
+                </div>
+              </div>
+
+              <div class="cassette-tape-window">
+                <div class="tape-reel reel-left">
+                  <div class="reel-teeth"></div>
+                </div>
+                <div class="tape-strip"></div>
+                <div class="tape-reel reel-right">
+                  <div class="reel-teeth"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Picture Frame -->
+          <div class="physical-frame">
+            <div class="frame-border">
+              <img src="${track.cover_url || ''}" alt="" class="frame-art-img" draggable="false" />
+              <div class="frame-gloss"></div>
+            </div>
+          </div>
+
         </div>
 
         <!-- Track Info -->
@@ -914,14 +971,12 @@ const MobileApp = (() => {
           });
         });
 
-        // 30s preview play
         const playBtn = card.querySelector('.play-preview-btn');
         playBtn?.addEventListener('click', (e) => {
           e.stopPropagation();
           handlePreviewButtonClick();
         });
 
-        // Full track on Spotify
         const spotifyFullBtn = card.querySelector('.play-spotify-full-btn');
         spotifyFullBtn?.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -934,7 +989,6 @@ const MobileApp = (() => {
           playFullTrackOnSpotify(track);
         });
 
-        // Progress bar scrubbing
         const progTrack = card.querySelector('.progress-track');
         progTrack?.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -961,10 +1015,6 @@ const MobileApp = (() => {
     const stage = $('.active-card .album-stage');
     if (stage) {
       stage.dataset.media = format;
-      const mediaCont = stage.querySelector('.media-container');
-      if (mediaCont) {
-        mediaCont.className = `media-container media-${format}`;
-      }
     }
   }
 
@@ -1026,12 +1076,83 @@ const MobileApp = (() => {
     } catch (e) {}
   }
 
-  /* ---------------------------- Drawer & Modals ---------------------------- */
+  /* ---------------------------- Drawer & Modal Sheets ---------------------------- */
+
+  async function openPlaylistSelectorSheet() {
+    renderPlaylistCards();
+    const sheet = $('#playlist-selector-sheet');
+    const overlay = $('#playlist-selector-overlay');
+    if (sheet && overlay) {
+      sheet.classList.add('open');
+      overlay.classList.add('open');
+    }
+    if (accessToken && allUserPlaylists.length === 0) {
+      await loadUserPlaylists();
+    }
+  }
+
+  function closePlaylistSelectorSheet() {
+    const sheet = $('#playlist-selector-sheet');
+    const overlay = $('#playlist-selector-overlay');
+    if (sheet && overlay) {
+      sheet.classList.remove('open');
+      overlay.classList.remove('open');
+    }
+  }
+
+  function renderPlaylistCards() {
+    const container = $('#playlist-cards-list');
+    if (!container) return;
+
+    if (!accessToken) {
+      container.innerHTML = `
+        <div class="sheet-connect-box">
+          <p class="sheet-connect-desc">Connect with Spotify to view, choose, or sync your playlists!</p>
+          <button class="sheet-connect-btn" id="btn-sheet-spotify-login">
+            <svg viewBox="0 0 24 24" class="spotify-svg-mini"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
+            <span>Connect Spotify</span>
+          </button>
+        </div>
+      `;
+      $('#btn-sheet-spotify-login')?.addEventListener('click', () => initiateSpotifyLogin());
+      return;
+    }
+
+    if (allUserPlaylists.length === 0) {
+      container.innerHTML = `
+        <div class="sheet-loading">Loading your playlists from Spotify...</div>
+      `;
+      return;
+    }
+
+    container.innerHTML = allUserPlaylists.map(pl => {
+      const isSelected = activePlaylist.id === pl.id;
+      const count = pl.tracks?.total || 0;
+      return `
+        <div class="playlist-card-item ${isSelected ? 'active' : ''}" data-id="${pl.id}">
+          <div class="pl-card-icon">${isSelected ? '🎧' : '📁'}</div>
+          <div class="pl-card-meta">
+            <div class="pl-card-title">${escapeHtml(pl.name)}</div>
+            <div class="pl-card-count">${count} tracks ${pl.public === false ? '• Private' : ''}</div>
+          </div>
+          <div class="pl-card-status">${isSelected ? '✓ ACTIVE' : 'Select'}</div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.playlist-card-item').forEach(card => {
+      card.addEventListener('click', async () => {
+        const id = card.dataset.id;
+        await selectPlaylist(id, true);
+        closePlaylistSelectorSheet();
+        await loadDiscoveryDeck();
+      });
+    });
+  }
 
   function openPlaylistDrawer() {
     renderDrawerTracks();
     updatePlaylistStatsUi();
-    populatePlaylistSelects();
     const drawer = $('#playlist-drawer');
     const overlay = $('#drawer-overlay');
     if (drawer && overlay) {
@@ -1071,7 +1192,7 @@ const MobileApp = (() => {
           <div class="track-row-title">${escapeHtml(t.name)}</div>
           <div class="track-row-artist">${escapeHtml(t.artist)}</div>
         </div>
-        <button class="track-row-spotify" data-id="${t.id}" data-url="${t.spotify_url || ''}" title="Play on Spotify">
+        <button class="track-row-spotify" data-id="${t.id}" title="Play in Spotify">
           <svg viewBox="0 0 24 24" class="spotify-svg-mini"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
         </button>
         <button class="track-row-delete" data-id="${t.id}" data-uri="${t.uri || ''}" title="Remove track">✖</button>
@@ -1094,17 +1215,6 @@ const MobileApp = (() => {
     });
   }
 
-  function openSetupModal() {
-    const modal = $('#setup-modal');
-    if (modal) modal.classList.add('open');
-    populatePlaylistSelects();
-  }
-
-  function closeSetupModal() {
-    const modal = $('#setup-modal');
-    if (modal) modal.classList.remove('open');
-  }
-
   function openSettingsModal() {
     const modal = $('#settings-modal');
     if (modal) modal.classList.add('open');
@@ -1115,22 +1225,6 @@ const MobileApp = (() => {
   function closeSettingsModal() {
     const modal = $('#settings-modal');
     if (modal) modal.classList.remove('open');
-  }
-
-  function populatePlaylistSelects() {
-    const selects = [$('#existing-playlist-select'), $('#drawer-playlist-select')];
-
-    selects.forEach(sel => {
-      if (!sel) return;
-      sel.innerHTML = '<option value="">-- Choose Existing Spotify Playlist --</option>';
-      allUserPlaylists.forEach(pl => {
-        const opt = document.createElement('option');
-        opt.value = pl.id;
-        opt.textContent = `${pl.name} (${pl.tracks?.total || 0} songs)`;
-        if (activePlaylist.id === pl.id) opt.selected = true;
-        sel.appendChild(opt);
-      });
-    });
   }
 
   function updateAuthUi() {
@@ -1148,7 +1242,7 @@ const MobileApp = (() => {
     }
   }
 
-  /* ---------------------------- Audio Listeners ---------------------------- */
+  /* ---------------------------- Audio Event Listeners ---------------------------- */
 
   function setupAudioListeners() {
     AudioManager.onTimeUpdate((cur, dur, progress) => {
@@ -1251,15 +1345,6 @@ const MobileApp = (() => {
   async function init() {
     document.body.dataset.albumStyle = currentAlbumStyle;
 
-    const canvas = $('#viz-canvas');
-    if (canvas) {
-      visualizer = new AudioVisualizer(canvas);
-      const savedViz = localStorage.getItem('swipemobile_viz_mode') || 'halo';
-      visualizer.setMode(savedViz);
-      const vizSelect = $('#viz-mode-select');
-      if (vizSelect) vizSelect.value = savedViz;
-    }
-
     setupAudioListeners();
     const savedVol = parseFloat(localStorage.getItem('swipemobile_volume') || '0.85');
     AudioManager.setVolume(savedVol);
@@ -1283,7 +1368,7 @@ const MobileApp = (() => {
       await loadDiscoveryDeck();
     } else {
       updateAuthUi();
-      openSetupModal();
+      openPlaylistSelectorSheet();
     }
   }
 
@@ -1295,40 +1380,24 @@ const MobileApp = (() => {
     $('#btn-preview-toggle')?.addEventListener('click', () => handlePreviewButtonClick());
     $('#btn-dock-spotify')?.addEventListener('click', () => playFullTrackOnSpotify(deck[currentIndex]));
 
-    // Drawer openers
-    $('#active-playlist-pill')?.addEventListener('click', () => openPlaylistDrawer());
-    $('#btn-view-playlist')?.addEventListener('click', () => openPlaylistDrawer());
-    $('#btn-close-drawer')?.addEventListener('click', () => closePlaylistDrawer());
-    $('#drawer-overlay')?.addEventListener('click', () => closePlaylistDrawer());
-
-    // Drawer Switch Playlist Dropdown
-    $('#drawer-playlist-select')?.addEventListener('change', async (e) => {
-      const plId = e.target.value;
-      if (plId) {
-        await selectPlaylist(plId, true);
-        await loadDiscoveryDeck();
-      }
+    // Playlist Selector Sheet Openers
+    $('#active-playlist-pill')?.addEventListener('click', () => openPlaylistSelectorSheet());
+    $('#btn-open-selector-from-drawer')?.addEventListener('click', () => {
+      closePlaylistDrawer();
+      openPlaylistSelectorSheet();
     });
+    $('#btn-close-playlist-selector')?.addEventListener('click', () => closePlaylistSelectorSheet());
+    $('#playlist-selector-overlay')?.addEventListener('click', () => closePlaylistSelectorSheet());
 
-    // Drawer Inline Playlist Creator Toggle
-    $('#btn-toggle-inline-create')?.addEventListener('click', () => {
-      const box = $('#drawer-inline-create-box');
-      if (box) {
-        const isHidden = box.style.display === 'none';
-        box.style.display = isHidden ? 'flex' : 'none';
-        if (isHidden) $('#drawer-inline-name-input')?.focus();
-      }
-    });
-
-    // Drawer Inline Create Playlist Submit
-    $('#btn-drawer-create-submit')?.addEventListener('click', async () => {
-      const input = $('#drawer-inline-name-input');
+    // Quick Create Playlist from Selector Sheet
+    $('#btn-quick-create-playlist')?.addEventListener('click', async () => {
+      const input = $('#new-playlist-quick-input');
       const name = input?.value.trim() || 'My Swiped Playlist';
       try {
         showToast('Creating playlist on Spotify...', '⏳');
         const newPl = await createSpotifyPlaylist(name);
         if (input) input.value = '';
-        $('#drawer-inline-create-box').style.display = 'none';
+        closePlaylistSelectorSheet();
         await selectPlaylist(newPl.id, true);
         await loadDiscoveryDeck();
         showToast(`Created & selected "${name}"!`, '🎉');
@@ -1337,56 +1406,30 @@ const MobileApp = (() => {
       }
     });
 
+    // Track Drawer Openers
+    $('#btn-view-playlist')?.addEventListener('click', () => openPlaylistDrawer());
+    $('#btn-close-drawer')?.addEventListener('click', () => closePlaylistDrawer());
+    $('#drawer-overlay')?.addEventListener('click', () => closePlaylistDrawer());
+
     // Drawer duplicate removal
     $('#btn-remove-duplicates')?.addEventListener('click', () => removeDuplicatesFromPlaylist());
 
     // Drawer open in Spotify App
     $('#btn-open-spotify-app')?.addEventListener('click', () => openActivePlaylistInSpotify());
 
-    // Modals
+    // Modals & Settings
     $('#btn-settings')?.addEventListener('click', () => openSettingsModal());
     $('#btn-close-settings')?.addEventListener('click', () => closeSettingsModal());
-    $('#btn-close-setup')?.addEventListener('click', () => closeSetupModal());
     $('#btn-spotify-login')?.addEventListener('click', () => loginWithSpotify());
-    $('#btn-modal-login')?.addEventListener('click', () => loginWithSpotify());
     $('#btn-logout')?.addEventListener('click', () => logout());
 
-    // Profile badge click: open user Spotify profile
+    // Profile badge click: open active playlist or user profile in Spotify
     $('#user-profile-badge')?.addEventListener('click', () => {
-      if (userProfile?.id) {
+      if (activePlaylist.id) {
+        openActivePlaylistInSpotify();
+      } else if (userProfile?.id) {
         window.location.href = `spotify:user:${userProfile.id}`;
       }
-    });
-
-    // Setup modal: Create playlist
-    $('#btn-create-playlist-modal')?.addEventListener('click', async () => {
-      const name = $('#new-playlist-name-input').value.trim() || 'My Mobile Swipe Playlist';
-      try {
-        showToast('Creating Spotify playlist...', '⏳');
-        const newPl = await createSpotifyPlaylist(name);
-        closeSetupModal();
-        await selectPlaylist(newPl.id, true);
-        await loadDiscoveryDeck();
-        showToast(`Created "${name}"!`, '🎉');
-      } catch (e) {
-        showToast(`Could not create: ${e.message}`, '⚠️');
-      }
-    });
-
-    // Setup modal: Select existing playlist
-    $('#existing-playlist-select')?.addEventListener('change', async (e) => {
-      const plId = e.target.value;
-      if (!plId) return;
-      await selectPlaylist(plId, true);
-      closeSetupModal();
-      await loadDiscoveryDeck();
-    });
-
-    // Visualizer Mode selector
-    $('#viz-mode-select')?.addEventListener('change', (e) => {
-      const mode = e.target.value;
-      if (visualizer) visualizer.setMode(mode);
-      localStorage.setItem('swipemobile_viz_mode', mode);
     });
 
     // Master volume slider in Settings
@@ -1426,11 +1469,16 @@ const MobileApp = (() => {
       currentIndex = 0;
       renderCards();
       updateButtonStates();
-      if (deck.length > 0) prepareTrackAudio(deck[0], autoPlayPreviews);
+      prefetchPreviewsForDeck();
+      if (deck.length > 0 && autoPlayPreviews) {
+        AudioManager.playTrack(deck[0], true);
+      }
     },
     setAlbumFormat,
     openPlaylistDrawer,
     closePlaylistDrawer,
+    openPlaylistSelectorSheet,
+    closePlaylistSelectorSheet,
     playFullTrackOnSpotify,
     handlePreviewButtonClick,
     selectPlaylist

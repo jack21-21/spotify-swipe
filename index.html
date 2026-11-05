@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SpotifySwipe">
-  <meta name="description" content="Tinder-style Spotify playlist maker with physical media frames and reactive visualizers">
+  <meta name="description" content="Tinder-style Spotify playlist maker with physical media frames and real music previews">
   
   <title>Spotify Swipe Mobile</title>
   
@@ -21,16 +21,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body data-album-style="record">
-  <!-- Dynamic Reactive Background Visualizer Canvas -->
-  <canvas id="viz-canvas"></canvas>
-
-  <!-- Chameleon Ambient Glow Overlays -->
+  <!-- Dynamic Chameleon Ambient Glow Overlays (Hardware-accelerated CSS) -->
   <div class="ambient-glow ambient-glow-top"></div>
   <div class="ambient-glow ambient-glow-bottom"></div>
 
   <!-- Main Mobile App Layout -->
   <div class="mobile-app-wrapper">
-    <!-- Header Bar -->
+    <!-- Streamlined Header for Samsung A55 / Mobile -->
     <header class="mobile-header">
       <div class="header-left">
         <div class="app-logo">
@@ -49,22 +46,6 @@
       </div>
 
       <div class="header-right">
-        <!-- Visualizer Dropdown -->
-        <div class="viz-selector-wrapper">
-          <select id="viz-mode-select" class="viz-select" aria-label="Visualizer Mode">
-            <option value="halo">✨ Halo</option>
-            <option value="cybereq">📊 Cyber EQ</option>
-            <option value="wave">🌊 Wave</option>
-            <option value="starfield">🌌 Starfield</option>
-            <option value="plasma">🔮 Plasma</option>
-            <option value="matrix">💻 Matrix</option>
-            <option value="galaxy">🪐 Galaxy</option>
-            <option value="ribbon">🎀 Ribbon</option>
-            <option value="prism">💎 Prism</option>
-            <option value="retrogrid">🕹️ Retro</option>
-          </select>
-        </div>
-
         <!-- Settings Button -->
         <button class="icon-btn" id="btn-settings" aria-label="Settings">⚙️</button>
 
@@ -81,10 +62,9 @@
 
     <!-- Card Deck Area -->
     <main class="deck-viewport">
-      <!-- Loading indicator -->
       <div id="deck-loader" class="deck-loader">
         <div class="spinner"></div>
-        <span>Finding your next favorite track...</span>
+        <span>Finding your next track...</span>
       </div>
 
       <!-- Card Stack Container -->
@@ -119,14 +99,36 @@
     </footer>
   </div>
 
-  <!-- Slide-up Playlist Drawer -->
+  <!-- Mobile-Native Playlist Selector Sheet (Opens on tapping header pill) -->
+  <div class="drawer-overlay" id="playlist-selector-overlay"></div>
+  <aside class="playlist-selector-sheet" id="playlist-selector-sheet">
+    <div class="drawer-handle-bar">
+      <div class="drawer-drag-pill"></div>
+    </div>
+    <div class="sheet-header">
+      <h3>Select Target Playlist</h3>
+      <button class="drawer-close-btn" id="btn-close-playlist-selector">✕</button>
+    </div>
+
+    <!-- Create New Playlist Row -->
+    <div class="create-playlist-row">
+      <input type="text" id="new-playlist-quick-input" placeholder="New Playlist Name (e.g. Jack 2026)" class="sheet-text-input" />
+      <button class="sheet-create-btn" id="btn-quick-create-playlist">+ Create</button>
+    </div>
+
+    <div class="sheet-sublabel">YOUR SPOTIFY PLAYLISTS:</div>
+    <div class="playlist-cards-list" id="playlist-cards-list">
+      <div class="sheet-loading">Loading your playlists from Spotify...</div>
+    </div>
+  </aside>
+
+  <!-- Slide-up Track Details Drawer (Shows all tracks in active playlist) -->
   <div class="drawer-overlay" id="drawer-overlay"></div>
   <aside class="playlist-drawer" id="playlist-drawer">
     <div class="drawer-handle-bar">
       <div class="drawer-drag-pill"></div>
     </div>
 
-    <!-- Active Playlist Header -->
     <div class="drawer-header">
       <div class="drawer-header-info">
         <h2 id="drawer-playlist-name" class="drawer-title">Swipe Playlist</h2>
@@ -135,78 +137,23 @@
       <button class="drawer-close-btn" id="btn-close-drawer">✕</button>
     </div>
 
-    <!-- Playlist Switcher & Creator in Drawer -->
-    <div class="drawer-playlist-switch-section">
-      <div class="drawer-switch-header">
-        <span class="switch-section-label">TARGET SPOTIFY PLAYLIST:</span>
-        <button class="drawer-new-pl-toggle" id="btn-toggle-inline-create">+ Create New</button>
-      </div>
-      
-      <div class="drawer-dropdown-row">
-        <select id="drawer-playlist-select" class="drawer-playlist-select" aria-label="Select Target Playlist">
-          <option value="">-- Choose Existing Playlist --</option>
-        </select>
-      </div>
-
-      <!-- Inline Create Playlist Box (Hidden by default, toggled via + Create New) -->
-      <div class="drawer-inline-create-box" id="drawer-inline-create-box" style="display: none;">
-        <input type="text" id="drawer-inline-name-input" class="drawer-text-input" placeholder="e.g. Roadtrip Jams 2026" />
-        <button class="primary-btn-mini" id="btn-drawer-create-submit">Save & Select</button>
-      </div>
-    </div>
-
-    <!-- Quick Action Bar -->
+    <!-- Quick Actions -->
     <div class="drawer-quick-actions">
+      <button class="drawer-action-btn btn-switch-pl" id="btn-open-selector-from-drawer">
+        <span>⇄ Switch Playlist</span>
+      </button>
       <button class="drawer-action-btn btn-dupe-clean" id="btn-remove-duplicates">
-        <span>🧹 Remove Duplicates</span>
+        <span>🧹 Remove Dupes</span>
       </button>
       <button class="drawer-action-btn btn-open-spotify" id="btn-open-spotify-app">
         <svg viewBox="0 0 24 24" class="spotify-svg-mini"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
-        <span>Open in Spotify App</span>
+        <span>Open Spotify</span>
       </button>
     </div>
 
     <!-- Scrollable Track List -->
     <div class="drawer-track-list" id="drawer-track-list"></div>
   </aside>
-
-  <!-- Setup & Playlist Select Modal -->
-  <div class="modal-backdrop" id="setup-modal">
-    <div class="modal-card glass-modal">
-      <div class="modal-header">
-        <h3>🎵 Choose Your Playlist</h3>
-        <button class="modal-close-btn" id="btn-close-setup">✕</button>
-      </div>
-
-      <div class="modal-body">
-        <p class="modal-desc">Pick which Spotify playlist you want your swiped songs to land in:</p>
-
-        <div class="setup-section">
-          <label class="input-label">Select Existing Playlist:</label>
-          <select id="existing-playlist-select" class="select-input">
-            <option value="">-- Choose Existing Spotify Playlist --</option>
-          </select>
-        </div>
-
-        <div class="divider-text"><span>OR</span></div>
-
-        <div class="setup-section">
-          <label class="input-label">Create a New Playlist:</label>
-          <div class="input-group">
-            <input type="text" id="new-playlist-name-input" class="text-input" placeholder="e.g. Jack Swiped Jams 2026" />
-            <button class="primary-btn" id="btn-create-playlist-modal">+ Create</button>
-          </div>
-        </div>
-
-        <div class="auth-gate-box">
-          <button class="spotify-connect-btn" id="btn-modal-login">
-            <svg viewBox="0 0 24 24" class="spotify-svg-btn"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
-            <span>Connect with Spotify (No PC Needed)</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- Settings Modal -->
   <div class="modal-backdrop" id="settings-modal">
@@ -239,7 +186,7 @@
         </div>
 
         <div class="setting-item">
-          <label>Redirect URI to add in Spotify Dashboard:</label>
+          <label>Redirect URI (in Spotify Dashboard):</label>
           <div class="uri-copy-box">
             <code id="redirect-uri-display"></code>
           </div>
@@ -264,7 +211,6 @@
   <!-- Core Scripts -->
   <script src="theme.js"></script>
   <script src="audio.js"></script>
-  <script src="visualizer.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
