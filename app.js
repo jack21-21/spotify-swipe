@@ -1505,21 +1505,16 @@ const MobileApp = (() => {
   }
 
   let isReplenishing = false;
-  async function replenishDeckIfNeeded() {
+  async function replenishDeckIfNeeded(force = false) {
     if (isReplenishing) return;
     const remaining = deck.length - currentIndex;
-    if (remaining > 6) return;
+    if (!force && remaining > 8) return;
 
     isReplenishing = true;
     try {
       let newTracks = [];
 
-      // 1. Fetch more from Jack's personal deck & core artists
-      try {
-        const personal = await fetchSpotifyPersonalDeck();
-        if (personal && personal.length > 0) newTracks.push(...personal);
-      } catch (e) {}
-
+      // 1. Core and recently liked artists
       const coreTasteArtists = [
         ...recentLikedArtists,
         'Deftones',
@@ -1527,23 +1522,51 @@ const MobileApp = (() => {
         'Nirvana',
         'The Smashing Pumpkins',
         'Fontaines D.C.',
-        'Arctic Monkeys'
+        'Arctic Monkeys',
+        'The Cure',
+        'Wunderhorse',
+        'Grian Chatten',
+        'Pixies',
+        'The Drums',
+        'The Streets'
       ];
       const uniqueSeedArtists = Array.from(new Set(coreTasteArtists));
-      for (const artist of uniqueSeedArtists.slice(0, 4)) {
+      const shuffledSeeds = [...uniqueSeedArtists].sort(() => Math.random() - 0.5);
+
+      for (const artist of shuffledSeeds.slice(0, 5)) {
         try {
           const sp = await fetchSpotifySearchTracks(`artist:"${artist}"`);
-          newTracks.push(...sp);
+          if (sp && sp.length > 0) newTracks.push(...sp);
         } catch (e) {}
       }
 
-      // 2. Fallback if offline
-      if (newTracks.length < 5) {
-        const chartTracks = await fetchDeezerChart();
-        newTracks.push(...(chartTracks || []));
+      // 2. Fetch from Jack's personal library & history
+      try {
+        const personal = await fetchSpotifyPersonalDeck();
+        if (personal && personal.length > 0) newTracks.push(...personal);
+      } catch (e) {}
+
+      // 3. Fallback Deezer artist searches for Jack's taste
+      if (newTracks.length < 15) {
+        for (const artist of shuffledSeeds.slice(0, 3)) {
+          try {
+            const dz = await fetchDeezerSearchTracks(`artist:"${artist}"`);
+            if (dz && dz.length > 0) newTracks.push(...dz);
+          } catch (e) {}
+        }
       }
 
-      const freshTracks = (newTracks || []).filter(t => !isDuplicateTrack(t));
+      let freshTracks = (newTracks || []).filter(t => !isDuplicateTrack(t));
+
+      // If all tracks were marked seen in current session, allow rediscovery of tracks not already in the active playlist
+      if (freshTracks.length === 0 && (newTracks.length > 0 || force)) {
+        const unadded = (newTracks || []).filter(t => t && t.id && !existingTrackIds.has(t.id));
+        if (unadded.length > 0) {
+          unadded.sort(() => Math.random() - 0.5);
+          freshTracks = unadded.slice(0, 25);
+        }
+      }
+
       freshTracks.forEach(t => {
         markTrackSeen(t);
         deck.push(t);
@@ -1901,6 +1924,15 @@ const MobileApp = (() => {
     container.innerHTML = '';
 
     if (currentIndex >= deck.length) {
+      if (!isReplenishing) {
+        replenishDeckIfNeeded(true).then(() => {
+          if (currentIndex < deck.length) {
+            renderCards();
+            updateButtonStates();
+          }
+        });
+      }
+
       container.innerHTML = `
         <div class="empty-deck-card glass-panel">
           <div class="empty-icon">🎉</div>
@@ -1912,7 +1944,10 @@ const MobileApp = (() => {
           </div>
         </div>
       `;
-      $('#btn-reload-deck')?.addEventListener('click', () => loadDiscoveryDeck());
+      $('#btn-reload-deck')?.addEventListener('click', () => {
+        sessionSeenTrackKeys.clear();
+        loadDiscoveryDeck();
+      });
       $('#btn-view-playlist-empty')?.addEventListener('click', () => openPlaylistDrawer());
       return;
     }
@@ -2889,14 +2924,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=2.1.4').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=2.1.5').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v2.1.4 installed! Auto-refreshing...');
-                showToast('App updated to v2.1.4! Refreshing...', '🚀');
+                console.log('[PWA] New version v2.1.5 installed! Auto-refreshing...');
+                showToast('App updated to v2.1.5! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
