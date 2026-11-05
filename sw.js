@@ -1,10 +1,10 @@
 /**
- * Spotify Swipe PWA Service Worker — v2.1.6
+ * Spotify Swipe PWA Service Worker — v2.1.7
  * Network-First strategy ensures the app always loads the latest code
  * from GitHub Pages, falling back to cache if offline.
  */
 
-const CACHE_NAME = 'spotify-swipe-v2.1.6';
+const CACHE_NAME = 'spotify-swipe-v2.1.7';
 const ASSETS = [
   './',
   './index.html',
@@ -54,11 +54,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (event.request.method !== 'GET') return;
+
   // Network-First for same-origin app files: always get the freshest version from GitHub!
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+        if (networkResponse && networkResponse.status === 200) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseClone);

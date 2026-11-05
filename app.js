@@ -152,13 +152,14 @@ const MobileApp = (() => {
   // Audio Preview Cache
   const previewCache = new Map();
 
-  /* ---------------------------- Deduplication & Adaptive Taste Learning ---------------------------- */
+  /* ---------------------------- Bulletproof Anti-Duplicate & Persistent Memory Engine ---------------------------- */
 
   const PERM_LIKED_KEYS_STORAGE = 'spotify_swipe_liked_keys_v2';
   const PERM_LIKED_IDS_STORAGE = 'spotify_swipe_liked_ids_v2';
   const PASSED_QUEUE_STORAGE = 'spotify_swipe_passed_queue_v2';
+  const SEEN_MEMORY_STORAGE = 'spotify_swipe_seen_memory_v2';
 
-  // 1. Permanent Liked Songs (Swiped right or in user playlists) - NEVER show again when selected on a playlist
+  // 1. Permanent Liked Songs (Swiped right or in user playlists) => NEVER show again when selected on a playlist!
   const permanentLikedKeys = new Set();
   const permanentLikedIds = new Set();
 
@@ -171,8 +172,8 @@ const MobileApp = (() => {
 
   function savePermanentLikedTracks() {
     try {
-      localStorage.setItem(PERM_LIKED_KEYS_STORAGE, JSON.stringify(Array.from(permanentLikedKeys).slice(-1000)));
-      localStorage.setItem(PERM_LIKED_IDS_STORAGE, JSON.stringify(Array.from(permanentLikedIds).slice(-1000)));
+      localStorage.setItem(PERM_LIKED_KEYS_STORAGE, JSON.stringify(Array.from(permanentLikedKeys).slice(-1500)));
+      localStorage.setItem(PERM_LIKED_IDS_STORAGE, JSON.stringify(Array.from(permanentLikedIds).slice(-1500)));
     } catch (e) {}
   }
 
@@ -184,7 +185,7 @@ const MobileApp = (() => {
     savePermanentLikedTracks();
   }
 
-  // 2. Sliding 200-Song Passed Buffer - If swiped NO, do not show again until at least 200 other songs pass!
+  // 2. Sliding 200-Song Passed Buffer => If swiped NO, do not show again until at least 200 other songs pass!
   let passedTracksQueue = [];
   try {
     passedTracksQueue = JSON.parse(localStorage.getItem(PASSED_QUEUE_STORAGE) || '[]');
@@ -209,31 +210,81 @@ const MobileApp = (() => {
     if (key) passedTracksQueue.push(key);
     if (id) passedTracksQueue.push(id);
 
-    // Keep up to 400 entries (at least 200 distinct passed songs)
-    while (passedTracksQueue.length > 400) {
+    // Keep up to 600 entries (at least 200-300 distinct passed songs)
+    while (passedTracksQueue.length > 600) {
       passedTracksQueue.shift();
     }
     savePassedTracksQueue();
   }
 
+  // 3. Persistent Seen Memory Ring Buffer => Don't return previously seen songs unless candidate pool runs completely dry!
+  const persistentSeenKeys = new Set();
+  const persistentSeenIds = new Set();
+
+  try {
+    const rawSeen = JSON.parse(localStorage.getItem(SEEN_MEMORY_STORAGE) || '[]');
+    if (Array.isArray(rawSeen)) {
+      rawSeen.forEach(entry => {
+        if (!entry) return;
+        if (entry.startsWith('id:')) persistentSeenIds.add(entry.slice(3));
+        else if (entry.startsWith('k:')) persistentSeenKeys.add(entry.slice(2));
+        else {
+          persistentSeenIds.add(entry);
+          persistentSeenKeys.add(entry);
+        }
+      });
+    }
+  } catch (e) {}
+
+  function saveSeenMemory() {
+    try {
+      const entries = [];
+      persistentSeenIds.forEach(id => entries.push('id:' + id));
+      persistentSeenKeys.forEach(k => entries.push('k:' + k));
+      const trimmed = entries.slice(-1000);
+      localStorage.setItem(SEEN_MEMORY_STORAGE, JSON.stringify(trimmed));
+    } catch (e) {}
+  }
+
+  function markTrackSeen(track) {
+    if (!track) return;
+    if (track.id) persistentSeenIds.add(track.id);
+    const key = getTrackKey(track);
+    if (key) persistentSeenKeys.add(key);
+    saveSeenMemory();
+  }
+
+  /**
+   * High-accuracy title & artist normalizer to catch remaster variations:
+   * "This Night Has Opened My Eyes - 2011 Remaster" => "thisnighthasopenedmyeyes::thesmiths"
+   */
   function getTrackKey(track) {
     if (!track) return '';
     const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const cleanTitle = (track.name || '')
-      .toLowerCase()
-      .replace(/\s*-\s*(remastered|remaster|deluxe|radio edit|bonus track|single version|anniversary|live).*/i, '')
+    let cleanTitle = (track.name || '').toLowerCase();
+    // Remove featured artists: feat. xxx, ft. xxx
+    cleanTitle = cleanTitle.replace(/\s*(feat\.|ft\.|featuring)\s+.*$/i, '');
+    // Remove remaster and edition tags
+    cleanTitle = cleanTitle
+      .replace(/\s*-\s*(20\d\d|19\d\d)?\s*(remastered|remaster|deluxe|radio edit|bonus track|single version|anniversary|live|original mix|mono|stereo).*/i, '')
       .replace(/\(.*?\)/g, '')
       .replace(/\[.*?\]/g, '')
       .trim();
-    const primaryArtist = (track.artist || '').split(/[,&]/)[0].trim();
+    // Normalize artist name: primary artist only
+    const primaryArtist = (track.artist || '')
+      .split(/[,&/]|(\s+feat\.?\s+)|(\s+ft\.?\s+)/i)[0]
+      .trim();
     return `${norm(cleanTitle)}::${norm(primaryArtist)}`;
   }
 
-  function isAlreadyInUpcomingDeck(track) {
+  /**
+   * Check if a track is already in the entire session deck (played or upcoming)
+   */
+  function isAlreadyInDeck(track) {
     if (!track) return true;
     const targetKey = getTrackKey(track);
     const targetId = track.id;
-    for (let i = currentIndex; i < deck.length; i++) {
+    for (let i = 0; i < deck.length; i++) {
       const d = deck[i];
       if (!d) continue;
       if (targetId && d.id === targetId) return true;
@@ -242,130 +293,177 @@ const MobileApp = (() => {
     return false;
   }
 
-  function isDuplicateTrack(track) {
+  /**
+   * Strict 5-Rule Deduplication Engine:
+   * Rule 1: Swiped good or in active playlist => NEVER come up ever again!
+   * Rule 2: Swiped NO => Do not show again until at least 200 other songs have passed!
+   * Rule 3: Already in the active deck => NEVER duplicate in deck!
+   * Rule 4: Already collected in the current candidate batch => NEVER duplicate in batch!
+   * Rule 5: Seen in persistent memory => DO NOT return unless candidate pool runs dry!
+   */
+  function isDuplicateTrack(track, batchSet = null, allowSeenRelax = false) {
     if (!track) return true;
     const id = track.id;
     const key = getTrackKey(track);
 
-    // Rule 1: Swiped good or currently in active playlist => NEVER come up ever again!
+    // Rule 1: Liked or in active playlist => PERMANENT EXCLUSION
     if (id && permanentLikedIds.has(id)) return true;
     if (key && permanentLikedKeys.has(key)) return true;
     if (id && existingTrackIds.has(id)) return true;
-    if (activePlaylist.tracks && activePlaylist.tracks.some(t => t.id === id || (key && getTrackKey(t) === key))) return true;
+    if (activePlaylist.tracks && activePlaylist.tracks.some(t => (t.id && t.id === id) || (key && getTrackKey(t) === key))) return true;
 
-    // Rule 2: Swiped NO => Do not show again until at least 200 other songs have passed!
+    // Rule 2: Swiped NO => 200-song sliding freeze window
     if (id && passedTracksQueue.includes(id)) return true;
     if (key && passedTracksQueue.includes(key)) return true;
 
-    // Rule 3: Session duplicate or already in upcoming deck
-    if (id && sessionSeenTrackKeys.has(id)) return true;
-    if (key && sessionSeenTrackKeys.has(key)) return true;
-    if (isAlreadyInUpcomingDeck(track)) return true;
+    // Rule 3: Already in current session deck
+    if (isAlreadyInDeck(track)) return true;
+
+    // Rule 4: Already collected in current batch
+    if (batchSet) {
+      if (id && batchSet.has(id)) return true;
+      if (key && batchSet.has(key)) return true;
+    }
+
+    // Rule 5: Previously seen buffer (relaxable only when candidate sources are exhausted)
+    if (!allowSeenRelax) {
+      if (id && persistentSeenIds.has(id)) return true;
+      if (key && persistentSeenKeys.has(key)) return true;
+    }
 
     return false;
   }
 
-  function markTrackSeen(track) {
-    if (!track) return;
-    if (track.id) sessionSeenTrackKeys.add(track.id);
-    const key = getTrackKey(track);
-    if (key) sessionSeenTrackKeys.add(key);
+  /**
+   * Deduplicate any candidate list in a single pass
+   */
+  function deduplicateTrackList(list, allowSeenRelax = false) {
+    if (!Array.isArray(list)) return [];
+    const seenIds = new Set();
+    const seenKeys = new Set();
+    const clean = [];
+    for (const t of list) {
+      if (!t || (!t.id && !t.name)) continue;
+      const id = t.id;
+      const key = getTrackKey(t);
+      if (id && seenIds.has(id)) continue;
+      if (key && seenKeys.has(key)) continue;
+      if (isDuplicateTrack(t, seenKeys, allowSeenRelax)) continue;
+      if (id) seenIds.add(id);
+      if (key) seenKeys.add(key);
+      clean.push(t);
+    }
+    return clean;
+  }
+
+  /**
+   * Curated similarity graph for instant recommendations & related sound discovery
+   */
+  const ARTIST_SIMILARITY_MAP = {
+    'radiohead': ['The Smiths', 'The Strokes', 'Jeff Buckley', 'Pixies', 'Mac DeMarco', 'Thom Yorke', 'Blur', 'The Smashing Pumpkins', 'Portishead', 'Joy Division', 'Slowdive'],
+    'the drums': ['Beach Fossils', 'Real Estate', 'DIIV', 'Wild Nothing', 'Craft Spells', 'The Smiths', 'Mac DeMarco', 'Surf Curse', 'Current Joys', 'Her\'s'],
+    'pixies': ['The Breeders', 'Sonic Youth', 'Dinosaur Jr.', 'Violent Femmes', 'Pavement', 'Nirvana', 'Radiohead', 'The Jesus and Mary Chain', 'Fugazi'],
+    'deftones': ['Alice In Chains', 'Soundgarden', 'Smashing Pumpkins', 'Tool', 'Chevelle', 'Korn', 'System of a Down', 'Loathe', 'Hum', 'Narrow Head'],
+    'the cure': ['Joy Division', 'New Order', 'Echo & the Bunnymen', 'Siouxsie and the Banshees', 'The Smiths', 'Interpol', 'Bauhaus', 'The Psychedelic Furs'],
+    'the smiths': ['The Cure', 'Morrissey', 'Joy Division', 'Echo & the Bunnymen', 'New Order', 'The Stone Roses', 'The Jam', 'The Jesus and Mary Chain'],
+    'the strokes': ['Arctic Monkeys', 'The Libertines', 'Franz Ferdinand', 'Interpol', 'The White Stripes', 'Yeah Yeah Yeahs', 'Phoenix', 'The Killers'],
+    'fontaines d.c.': ['IDLES', 'Shame', 'Squid', 'The Murder Capital', 'Yard Act', 'Grian Chatten', 'Wunderhorse', 'Dry Cleaning', 'Sleaford Mods'],
+    'nirvana': ['Alice In Chains', 'Soundgarden', 'Pearl Jam', 'Smashing Pumpkins', 'Stone Temple Pilots', 'Silverchair', 'Foo Fighters', 'Mudhoney'],
+    'arctic monkeys': ['The Strokes', 'Miles Kane', 'The Last Shadow Puppets', 'The Libertines', 'Franz Ferdinand', 'Kasabian', 'Foals', 'The Vaccines'],
+    'wunderhorse': ['Fontaines D.C.', 'The Murder Capital', 'Grian Chatten', 'Radiohead', 'Inhaler', 'Sam Fender', 'The Reytons'],
+    'kings of leon': ['The Black Keys', 'The White Stripes', 'Cage the Elephant', 'Arctic Monkeys', 'The Strokes', 'The Killers', 'Band of Horses'],
+    'mac demarco': ['Boy Pablo', 'Cuco', 'Homeshake', 'Mild High Club', 'Men I Trust', 'King Krule', 'Steve Lacy', 'The Drums'],
+    'the smashing pumpkins': ['Nirvana', 'Soundgarden', 'Silverchair', 'Deftones', 'Alice In Chains', 'Stone Temple Pilots', 'Bush'],
+    'slowdive': ['My Bloody Valentine', 'Cocteau Twins', 'Ride', 'Lush', 'Mazzy Star', 'Drop Nineteens', 'DIIV', 'Alvvays']
+  };
+
+  /**
+   * Discover related artists dynamically via Deezer JSONP with fallback to curated taste map
+   */
+  function fetchDeezerRelatedArtists(artistName) {
+    return new Promise((resolve) => {
+      if (!artistName) return resolve([]);
+      const normArt = artistName.toLowerCase().trim();
+      const localFallback = ARTIST_SIMILARITY_MAP[normArt] || [];
+
+      const cbSearch = 'dz_art_' + Math.random().toString(36).substring(2, 9);
+      const script1 = document.createElement('script');
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve(localFallback);
+      }, 3500);
+
+      function cleanup() {
+        clearTimeout(timer);
+        try { delete window[cbSearch]; } catch (e) { window[cbSearch] = undefined; }
+        script1.remove();
+      }
+
+      window[cbSearch] = (data) => {
+        cleanup();
+        if (data && data.data && data.data.length > 0 && data.data[0].id) {
+          const artId = data.data[0].id;
+          const cbRel = 'dz_rel_' + Math.random().toString(36).substring(2, 9);
+          const script2 = document.createElement('script');
+          const timer2 = setTimeout(() => {
+            try { delete window[cbRel]; } catch (e) { window[cbRel] = undefined; }
+            script2.remove();
+            resolve(localFallback);
+          }, 3500);
+
+          window[cbRel] = (relData) => {
+            clearTimeout(timer2);
+            try { delete window[cbRel]; } catch (e) { window[cbRel] = undefined; }
+            script2.remove();
+            if (relData && relData.data && Array.isArray(relData.data) && relData.data.length > 0) {
+              const names = relData.data.map(a => a.name).filter(Boolean);
+              resolve(names);
+            } else {
+              resolve(localFallback);
+            }
+          };
+
+          script2.onerror = () => {
+            clearTimeout(timer2);
+            try { delete window[cbRel]; } catch (e) { window[cbRel] = undefined; }
+            script2.remove();
+            resolve(localFallback);
+          };
+
+          script2.src = `https://api.deezer.com/artist/${artId}/related?output=jsonp&callback=${cbRel}`;
+          document.body.appendChild(script2);
+        } else {
+          resolve(localFallback);
+        }
+      };
+
+      script1.onerror = () => {
+        cleanup();
+        resolve(localFallback);
+      };
+
+      script1.src = `https://api.deezer.com/search/artist?q=${encodeURIComponent(artistName)}&output=jsonp&callback=${cbSearch}`;
+      document.body.appendChild(script1);
+    });
   }
 
   /**
    * Adaptive Taste Learning:
-   * When you swipe right on an artist (e.g. Deftones), the engine discovers more
-   * by that artist and related sounds, adding fresh, never-seen tracks deep in the feed.
+   * When you swipe right on an artist (e.g. Deftones), the engine records your taste
+   * so upcoming background batches automatically recommend that vibe without duplicates.
    */
   async function learnUserTaste(track) {
     if (!track || !track.artist) return;
-    const primaryArtist = track.artist.split(/[,&]/)[0].trim();
+    const primaryArtist = track.artist.split(/[,&/]|(\s+feat\.?\s+)/i)[0].trim();
     if (!primaryArtist || primaryArtist.toLowerCase() === 'various artists') return;
 
     recentLikedArtists = recentLikedArtists.filter(a => a.toLowerCase() !== primaryArtist.toLowerCase());
     recentLikedArtists.unshift(primaryArtist);
-    if (recentLikedArtists.length > 12) recentLikedArtists.pop();
+    if (recentLikedArtists.length > 20) recentLikedArtists.pop();
 
     try {
       localStorage.setItem('swipemobile_taste_artists', JSON.stringify(recentLikedArtists));
     } catch (e) {}
-
-    // Auto-seed more songs from this artist into upcoming deck
-    await expandDeckWithArtist(primaryArtist);
-  }
-
-  let isExpandingArtist = false;
-  async function expandDeckWithArtist(artistName) {
-    if (!artistName || isExpandingArtist) return;
-    isExpandingArtist = true;
-
-    try {
-      const token = await getValidAccessToken();
-      let candidates = [];
-
-      // 1. Query Spotify with random offset to explore deep catalog, not just the same 3 songs
-      if (token) {
-        try {
-          const offset = Math.floor(Math.random() * 20);
-          const res = await spotifyApi(`/search?q=${encodeURIComponent('artist:"' + artistName + '"')}&type=track&limit=25&offset=${offset}`);
-          if (res && res.tracks?.items) {
-            res.tracks.items.forEach(trk => {
-              if (!trk || !trk.id || isDuplicateTrack(trk)) return;
-              candidates.push({
-                id: trk.id,
-                uri: trk.uri,
-                name: trk.name,
-                artist: trk.artists?.map(a => a.name).join(', ') || artistName,
-                album: trk.album?.name || '',
-                year: trk.album?.release_date ? trk.album.release_date.split('-')[0] : '',
-                total_tracks: trk.album?.total_tracks || 1,
-                cover_url: trk.album?.images?.[0]?.url || '',
-                preview_url: trk.preview_url,
-                duration_ms: trk.duration_ms,
-                spotify_url: trk.external_urls?.spotify,
-                plays: Math.floor(Math.random() * 45) + 15,
-                bpm: Math.floor(Math.random() * 40) + 105
-              });
-            });
-          }
-        } catch (spErr) {
-          console.warn('[Taste] Spotify artist search error:', spErr.message);
-        }
-      }
-
-      // 2. Complement with Deezer search if needed
-      if (candidates.length < 5) {
-        try {
-          const dzList = await fetchDeezerSearchTracks(`artist:"${artistName}"`);
-          const filteredDz = (dzList || []).filter(t => !isDuplicateTrack(t));
-          candidates = candidates.concat(filteredDz);
-        } catch (dzErr) {}
-      }
-
-      const freshTracks = candidates.filter(t => !isDuplicateTrack(t));
-      if (freshTracks.length > 0) {
-        // Shuffle fresh tracks
-        for (let i = freshTracks.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [freshTracks[i], freshTracks[j]] = [freshTracks[j], freshTracks[i]];
-        }
-
-        freshTracks.forEach(t => markTrackSeen(t));
-
-        // Place them at least 8 to 12 cards ahead so they blend naturally into discovery, NOT every 5 cards!
-        const insertPos = Math.min(currentIndex + 8, deck.length);
-        deck.splice(insertPos, 0, ...freshTracks.slice(0, 5));
-        if (freshTracks.length > 5) {
-          deck.push(...freshTracks.slice(5));
-        }
-
-        prefetchPreviewsForDeck();
-      }
-    } catch (e) {
-      console.warn('[Taste] expandDeckWithArtist error:', e);
-    } finally {
-      isExpandingArtist = false;
-    }
   }
 
   /* ---------------------------- 100% Direct Spotify PKCE Authentication (No Third-Party APIs) ---------------------------- */
@@ -928,7 +1026,10 @@ const MobileApp = (() => {
 
     await loadPlaylistTracks(pl.id);
 
-    if (notify) {
+    if (currentDiscoverySource === 'spotify-recommended') {
+      showToast(`Analyzing "${pl.name}" for Spotify recommendations...`, '✨');
+      await loadDiscoveryDeck();
+    } else if (notify) {
       showToast(`Selected "${pl.name}"`, '📁');
     }
   }
@@ -1462,30 +1563,38 @@ const MobileApp = (() => {
 
   /* ---------------------------- Multi-Source Discovery Engine ---------------------------- */
 
-  let currentDiscoverySource = localStorage.getItem('swipemobile_discovery_source') || 'spotify-personal';
+  let currentDiscoverySource = localStorage.getItem('swipemobile_discovery_source') || 'spotify-recommended';
   if (currentDiscoverySource === 'global') {
-    currentDiscoverySource = 'spotify-personal';
-    localStorage.setItem('swipemobile_discovery_source', 'spotify-personal');
+    // Migrate legacy default to premier Spotify Recommended mode
+    currentDiscoverySource = 'spotify-recommended';
+    localStorage.setItem('swipemobile_discovery_source', 'spotify-recommended');
   }
 
   function setDiscoverySource(source) {
-    if (!['global', 'spotify-featured', 'spotify-personal'].includes(source)) return;
+    if (!['spotify-recommended', 'spotify-personal', 'spotify-featured', 'global'].includes(source)) return;
     currentDiscoverySource = source;
     localStorage.setItem('swipemobile_discovery_source', source);
     updateDiscoverySourceUi();
     loadDiscoveryDeck();
-    showToast(`Switched to ${source === 'global' ? 'Global Trending' : (source === 'spotify-featured' ? 'Spotify Hits' : 'Jack\'s Spotify Favorites')}`, '✨');
+    const nameMap = {
+      'spotify-recommended': 'Spotify Recommended (Playlist Radar)',
+      'spotify-personal': "Jack's Spotify Favorites",
+      'spotify-featured': 'Spotify Top Hits & New',
+      'global': 'Global Trending Hits'
+    };
+    showToast(`Switched mode to ${nameMap[source] || source}`, '✨');
   }
 
   function updateDiscoverySourceUi() {
     const pillIcon = $('#source-pill-icon');
     const pillLabel = $('#source-pill-label');
     const srcMap = {
-      'global': { icon: '🔥', label: 'Global Hits' },
-      'spotify-featured': { icon: '🟢', label: 'Spotify Hits' },
-      'spotify-personal': { icon: '⭐', label: 'My Spotify' }
+      'spotify-recommended': { icon: '✨', label: 'Recommended' },
+      'spotify-personal': { icon: '⭐', label: 'My Spotify' },
+      'spotify-featured': { icon: '📈', label: 'Spotify Hits' },
+      'global': { icon: '🔥', label: 'Global Hits' }
     };
-    const cur = srcMap[currentDiscoverySource] || srcMap['spotify-personal'];
+    const cur = srcMap[currentDiscoverySource] || srcMap['spotify-recommended'];
     if (pillIcon) pillIcon.textContent = cur.icon;
     if (pillLabel) pillLabel.textContent = cur.label;
 
@@ -1494,8 +1603,111 @@ const MobileApp = (() => {
     });
   }
 
-  async function fetchSpotifyFeaturedDeck() {
+  /**
+   * Spotify Recommended Mode ("Playlist Radar"):
+   * Analyzes all tracks in the active playlist + recent liked artists,
+   * traces acoustic affinity & related sound graphs, and fetches genuine matching tracks
+   * with strict 0-duplicate enforcement.
+   */
+  async function fetchPlaylistRecommendationsDeck(allowSeenRelax = false) {
     const pool = [];
+    const seenBatchIds = new Set();
+    const seenBatchKeys = new Set();
+
+    try {
+      // 1. Gather seed artists from active playlist tracks
+      const plTracks = activePlaylist.tracks || [];
+      const plArtists = [];
+      plTracks.forEach(t => {
+        const art = (t.artist || '').split(/[,&/]|(\s+feat\.?\s+)/i)[0].trim();
+        if (art && art.toLowerCase() !== 'various artists' && !plArtists.includes(art)) {
+          plArtists.push(art);
+        }
+      });
+
+      // Mix in recently liked artists
+      (recentLikedArtists || []).forEach(art => {
+        if (art && !plArtists.includes(art)) plArtists.push(art);
+      });
+
+      // If playlist is empty, seed from Jack's core taste artists
+      if (plArtists.length === 0) {
+        plArtists.push(
+          'Radiohead', 'Deftones', 'The Drums', 'Pixies',
+          'The Cure', 'The Smiths', 'Fontaines D.C.', 'The Strokes',
+          'Arctic Monkeys', 'Nirvana', 'Wunderhorse'
+        );
+      }
+
+      // Shuffle seed artists to explore diverse acoustic branches
+      const shuffledSeeds = [...plArtists].sort(() => Math.random() - 0.5);
+      const selectedSeeds = shuffledSeeds.slice(0, 4);
+
+      // 2. Discover related/similar artists using Deezer's related artist graph + curated map
+      const discoveredArtists = new Set(selectedSeeds);
+      for (const seed of selectedSeeds) {
+        try {
+          const related = await fetchDeezerRelatedArtists(seed);
+          (related || []).slice(0, 4).forEach(rel => discoveredArtists.add(rel));
+        } catch (e) {}
+      }
+
+      // 3. For each discovered artist, search Spotify for tracks
+      const allArtists = Array.from(discoveredArtists).sort(() => Math.random() - 0.5);
+      for (const artistName of allArtists.slice(0, 8)) {
+        try {
+          const spTracks = await fetchSpotifySearchTracks(`artist:"${artistName}"`, true, allowSeenRelax);
+          if (spTracks && spTracks.length > 0) {
+            spTracks.forEach(trk => {
+              const id = trk.id;
+              const key = getTrackKey(trk);
+              if (id && seenBatchIds.has(id)) return;
+              if (key && seenBatchKeys.has(key)) return;
+              if (isDuplicateTrack(trk, seenBatchKeys, allowSeenRelax)) return;
+              if (id) seenBatchIds.add(id);
+              if (key) seenBatchKeys.add(key);
+              pool.push(trk);
+            });
+          }
+        } catch (e) {}
+      }
+
+      // 4. Complement with Deezer search if Spotify search returns few results or offline
+      if (pool.length < 15) {
+        for (const artistName of allArtists.slice(0, 4)) {
+          try {
+            const dzTracks = await fetchDeezerSearchTracks(`artist:"${artistName}"`);
+            (dzTracks || []).forEach(trk => {
+              const id = trk.id;
+              const key = getTrackKey(trk);
+              if (id && seenBatchIds.has(id)) return;
+              if (key && seenBatchKeys.has(key)) return;
+              if (isDuplicateTrack(trk, seenBatchKeys, allowSeenRelax)) return;
+              if (id) seenBatchIds.add(id);
+              if (key) seenBatchKeys.add(key);
+              pool.push(trk);
+            });
+          } catch (e) {}
+        }
+      }
+
+      // 5. If pool is completely dry (exhaustion), relax seen memory so fresh tracks by these artists appear
+      if (pool.length === 0 && !allowSeenRelax) {
+        console.log('[Recommendations] Candidate pool exhausted, relaxing seen memory for new discoveries...');
+        return await fetchPlaylistRecommendationsDeck(true);
+      }
+    } catch (err) {
+      console.warn('[Recommendations] Failed to build recommended deck:', err);
+    }
+
+    return deduplicateTrackList(pool, allowSeenRelax);
+  }
+
+  async function fetchSpotifyFeaturedDeck(allowSeenRelax = false) {
+    const pool = [];
+    const seenBatchIds = new Set();
+    const seenBatchKeys = new Set();
+
     try {
       // 1. Featured Playlists (e.g. Today's Top Hits, Pop Rising)
       const feat = await spotifyApi('/browse/featured-playlists?limit=5');
@@ -1505,7 +1717,14 @@ const MobileApp = (() => {
         if (plTracks && plTracks.items) {
           plTracks.items.forEach(item => {
             const trk = item.track || item.item;
-            if (!trk || !trk.id || existingTrackIds.has(trk.id)) return;
+            if (!trk || !trk.id) return;
+            const id = trk.id;
+            const key = getTrackKey(trk);
+            if (seenBatchIds.has(id) || seenBatchKeys.has(key)) return;
+            if (isDuplicateTrack(trk, seenBatchKeys, allowSeenRelax)) return;
+            seenBatchIds.add(id);
+            seenBatchKeys.add(key);
+
             pool.push({
               id: trk.id,
               uri: trk.uri,
@@ -1527,11 +1746,14 @@ const MobileApp = (() => {
     } catch (e) {
       console.warn('[Spotify] Featured playlist fetch error:', e);
     }
-    return pool;
+    return deduplicateTrackList(pool, allowSeenRelax);
   }
 
-  async function fetchSpotifyPersonalDeck() {
+  async function fetchSpotifyPersonalDeck(allowSeenRelax = false) {
     const pool = [];
+    const seenBatchIds = new Set();
+    const seenBatchKeys = new Set();
+
     try {
       const [topShort, topMed, recent, saved] = await Promise.allSettled([
         spotifyApi('/me/top/tracks?limit=50&time_range=short_term'),
@@ -1541,7 +1763,16 @@ const MobileApp = (() => {
       ]);
 
       function ingest(trk) {
-        if (!trk || !trk.id || existingTrackIds.has(trk.id)) return;
+        if (!trk || !trk.id) return;
+        const id = trk.id;
+        const key = getTrackKey(trk);
+        // Absolute intra-batch deduplication: reject if already added in this call
+        if (seenBatchIds.has(id) || seenBatchKeys.has(key)) return;
+        if (isDuplicateTrack(trk, seenBatchKeys, allowSeenRelax)) return;
+
+        seenBatchIds.add(id);
+        seenBatchKeys.add(key);
+
         pool.push({
           id: trk.id,
           uri: trk.uri,
@@ -1566,17 +1797,25 @@ const MobileApp = (() => {
     } catch (e) {
       console.warn('[Spotify] Personal deck fetch error:', e);
     }
-    return pool;
+    return deduplicateTrackList(pool, allowSeenRelax);
   }
 
-  async function fetchSpotifySearchTracks(query, randomOffset = false) {
+  async function fetchSpotifySearchTracks(query, randomOffset = false, allowSeenRelax = false) {
     try {
       const offset = randomOffset ? Math.floor(Math.random() * 20) : 0;
       const res = await spotifyApi(`/search?q=${encodeURIComponent(query)}&type=track&limit=25&offset=${offset}`, {}, true);
       const list = [];
+      const seenBatch = new Set();
       if (res && res.tracks?.items) {
         res.tracks.items.forEach(trk => {
-          if (!trk || !trk.id || isDuplicateTrack(trk)) return;
+          if (!trk || !trk.id) return;
+          const id = trk.id;
+          const key = getTrackKey(trk);
+          if (seenBatch.has(id) || seenBatch.has(key)) return;
+          if (isDuplicateTrack(trk, seenBatch, allowSeenRelax)) return;
+          seenBatch.add(id);
+          seenBatch.add(key);
+
           list.push({
             id: trk.id,
             uri: trk.uri,
@@ -1594,7 +1833,7 @@ const MobileApp = (() => {
           });
         });
       }
-      return list;
+      return deduplicateTrackList(list, allowSeenRelax);
     } catch (e) {
       console.warn('[Spotify Search] error:', e);
       return [];
@@ -1611,81 +1850,30 @@ const MobileApp = (() => {
     try {
       let newTracks = [];
 
-      // 1. Core and recently liked artists
-      const coreTasteArtists = [
-        ...recentLikedArtists,
-        'Deftones',
-        'Radiohead',
-        'Nirvana',
-        'The Smashing Pumpkins',
-        'Fontaines D.C.',
-        'Arctic Monkeys',
-        'The Cure',
-        'Wunderhorse',
-        'Grian Chatten',
-        'Pixies',
-        'The Drums',
-        'The Streets'
-      ];
-      const uniqueSeedArtists = Array.from(new Set(coreTasteArtists));
-      const shuffledSeeds = [...uniqueSeedArtists].sort(() => Math.random() - 0.5);
-
-      for (const artist of shuffledSeeds.slice(0, 5)) {
-        try {
-          const sp = await fetchSpotifySearchTracks(`artist:"${artist}"`, true);
-          if (sp && sp.length > 0) newTracks.push(...sp);
-        } catch (e) {}
+      if (currentDiscoverySource === 'spotify-recommended') {
+        newTracks = await fetchPlaylistRecommendationsDeck();
+      } else if (currentDiscoverySource === 'spotify-personal') {
+        newTracks = await fetchSpotifyPersonalDeck();
+      } else if (currentDiscoverySource === 'spotify-featured') {
+        newTracks = await fetchSpotifyFeaturedDeck();
+      } else {
+        newTracks = await fetchDeezerChart();
       }
 
-      // 2. Fetch from Jack's personal library & history
-      try {
-        const personal = await fetchSpotifyPersonalDeck();
-        if (personal && personal.length > 0) newTracks.push(...personal);
-      } catch (e) {}
-
-      // 3. Fallback Deezer artist searches for Jack's taste
-      if (newTracks.length < 15) {
-        for (const artist of shuffledSeeds.slice(0, 3)) {
-          try {
-            const dz = await fetchDeezerSearchTracks(`artist:"${artist}"`);
-            if (dz && dz.length > 0) newTracks.push(...dz);
-          } catch (e) {}
-        }
-      }
-
-      let freshTracks = (newTracks || []).filter(t => !isDuplicateTrack(t));
-
-      // 4. If fresh tracks pool is still small, expand to closely related alternative/indie/post-punk legends
-      if (freshTracks.length < 12) {
-        const altPool = [
-          'Joy Division', 'Interpol', 'Slowdive', 'My Bloody Valentine', 'Placebo',
-          'Queens of the Stone Age', 'Soundgarden', 'Alice In Chains', 'Sonic Youth',
-          'Cocteau Twins', 'IDLES', 'Shame', 'Squid', 'Wolf Alice', 'Foals', 'The National',
-          'Pavement', 'The Smiths', 'Echo & the Bunnymen', 'The Jesus and Mary Chain'
-        ].sort(() => Math.random() - 0.5);
-
-        for (const extraArtist of altPool.slice(0, 4)) {
-          try {
-            const extra = await fetchSpotifySearchTracks(`artist:"${extraArtist}"`, true);
-            (extra || []).forEach(trk => {
-              if (!isDuplicateTrack(trk)) freshTracks.push(trk);
-            });
-          } catch (e) {}
-        }
-      }
-
-      // Shuffle fresh tracks
-      for (let i = freshTracks.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [freshTracks[i], freshTracks[j]] = [freshTracks[j], freshTracks[i]];
-      }
-
-      freshTracks.forEach(t => {
-        markTrackSeen(t);
-        deck.push(t);
-      });
+      // Filter and deduplicate against existing deck
+      const freshTracks = deduplicateTrackList(newTracks);
 
       if (freshTracks.length > 0) {
+        // Shuffle fresh tracks
+        for (let i = freshTracks.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [freshTracks[i], freshTracks[j]] = [freshTracks[j], freshTracks[i]];
+        }
+
+        freshTracks.forEach(t => {
+          deck.push(t);
+        });
+
         prefetchPreviewsForDeck();
       }
     } catch (e) {
@@ -1695,7 +1883,7 @@ const MobileApp = (() => {
     }
   }
 
-  async function loadDiscoveryDeck() {
+  async function loadDiscoveryDeck(allowSeenRelax = false) {
     if (isLoadingDeck) return;
     isLoadingDeck = true;
     showLoading(true);
@@ -1703,36 +1891,24 @@ const MobileApp = (() => {
     try {
       let candidateList = [];
 
-      // 1. ALWAYS load Jack's personal Spotify listening history first! (Top tracks, recently played, saved songs)
-      try {
-        const personalList = await fetchSpotifyPersonalDeck();
-        if (personalList && personalList.length > 0) {
-          candidateList.push(...personalList);
-        }
-      } catch (e) {
-        console.warn('[Deck] Personal tracks fetch notice:', e.message);
+      // 1. Fetch tracks according to selected discovery mode
+      if (currentDiscoverySource === 'spotify-recommended') {
+        candidateList = await fetchPlaylistRecommendationsDeck(allowSeenRelax);
+      } else if (currentDiscoverySource === 'spotify-personal') {
+        candidateList = await fetchSpotifyPersonalDeck(allowSeenRelax);
+      } else if (currentDiscoverySource === 'spotify-featured') {
+        candidateList = await fetchSpotifyFeaturedDeck(allowSeenRelax);
+      } else {
+        candidateList = await fetchDeezerChart();
       }
 
-      // 2. Blend Jack's core & learned taste artists (Deftones, Radiohead, Nirvana, Smashing Pumpkins, Fontaines D.C., Arctic Monkeys)
-      const coreTasteArtists = [
-        ...recentLikedArtists,
-        'Deftones',
-        'Radiohead',
-        'Nirvana',
-        'The Smashing Pumpkins',
-        'Fontaines D.C.',
-        'Arctic Monkeys',
-        'The Cure'
-      ];
-      const uniqueSeedArtists = Array.from(new Set(coreTasteArtists));
-      for (const artist of uniqueSeedArtists.slice(0, 5)) {
-        try {
-          const spList = await fetchSpotifySearchTracks(`artist:"${artist}"`);
-          candidateList.push(...spList);
-        } catch (e) {}
+      // 2. If pool is small, supplement from taste profile
+      if (candidateList.length < 10) {
+        const fallbackPersonal = await fetchSpotifyPersonalDeck(allowSeenRelax);
+        (fallbackPersonal || []).forEach(trk => candidateList.push(trk));
       }
 
-      // 3. Fallback if offline
+      // 3. Fallback to Deezer chart if offline
       if (candidateList.length === 0) {
         candidateList = await fetchDeezerChart();
       }
@@ -1743,8 +1919,7 @@ const MobileApp = (() => {
       }
 
       // 100% Strict Deduplication
-      candidateList = candidateList.filter(t => !isDuplicateTrack(t));
-      candidateList.forEach(t => markTrackSeen(t));
+      candidateList = deduplicateTrackList(candidateList, allowSeenRelax);
 
       // Shuffle
       for (let i = candidateList.length - 1; i > 0; i--) {
@@ -1770,8 +1945,7 @@ const MobileApp = (() => {
       console.error('[Deck] Failed to load deck:', err);
       const fallbackList = await fetchDeezerChart();
       if (fallbackList && fallbackList.length > 0) {
-        deck = fallbackList.filter(t => !isDuplicateTrack(t));
-        deck.forEach(t => markTrackSeen(t));
+        deck = deduplicateTrackList(fallbackList, true);
         currentIndex = 0;
         history = [];
         renderCards();
@@ -1856,7 +2030,7 @@ const MobileApp = (() => {
 
   async function loadDemoDeck() {
     showLoading(true);
-    deck = [...DEMO_TRACKS];
+    deck = deduplicateTrackList([...DEMO_TRACKS], true);
     currentIndex = 0;
     history = [];
 
@@ -1963,6 +2137,7 @@ const MobileApp = (() => {
     const track = deck[currentIndex];
 
     vibrate(25);
+    markTrackSeen(track);
 
     if (direction === 'right') {
       if (card) {
@@ -2019,6 +2194,12 @@ const MobileApp = (() => {
       savePassedTracksQueue();
     }
 
+    // Also restore from persistent seen memory on undo
+    if (last.track.id) persistentSeenIds.delete(last.track.id);
+    const uKey = getTrackKey(last.track);
+    if (uKey) persistentSeenKeys.delete(uKey);
+    saveSeenMemory();
+
     renderCards();
     updateButtonStates();
     if (autoPlayPreviews) {
@@ -2066,8 +2247,7 @@ const MobileApp = (() => {
         </div>
       `;
       $('#btn-reload-deck')?.addEventListener('click', () => {
-        sessionSeenTrackKeys.clear();
-        loadDiscoveryDeck();
+        loadDiscoveryDeck(true);
       });
       $('#btn-view-playlist-empty')?.addEventListener('click', () => openPlaylistDrawer());
       return;
@@ -3045,20 +3225,49 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=2.1.6').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=2.1.7').then(reg => {
+        // Immediate check for updates on startup
+        reg.update().catch(() => {});
+
+        // Periodic check every 10 minutes in background
+        setInterval(() => {
+          reg.update().catch(() => {});
+        }, 10 * 60 * 1000);
+
+        // Check for updates when returning to app or phone unlocked
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            reg.update().catch(() => {});
+          }
+        });
+        window.addEventListener('focus', () => {
+          reg.update().catch(() => {});
+        });
+
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v2.1.6 installed! Auto-refreshing...');
-                showToast('App updated to v2.1.6! Refreshing...', '🚀');
-                setTimeout(() => window.location.reload(), 1000);
+                console.log('[PWA] New version v2.1.7 installed! Auto-refreshing to activate...');
+                showToast('App updated to v2.1.7! Loading latest version...', '🚀');
+                setTimeout(() => window.location.reload(), 600);
               }
             };
           }
         };
-      }).catch(() => {});
+      }).catch(err => {
+        console.warn('[PWA] Service worker register warning:', err);
+      });
+
+      // Auto-reload as soon as new service worker takes control
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        console.log('[PWA] Service worker controller changed. Auto-reloading to fresh code...');
+        window.location.reload();
+      });
     }
 
     loadSavedActivePlaylist();
