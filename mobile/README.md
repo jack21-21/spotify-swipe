@@ -2,7 +2,7 @@
 
 [![Spotify Swipe Live](https://img.shields.io/badge/Live%20App-jack21--21.github.io%2Fspotify--swipe-1ED760?style=for-the-badge&logo=spotify&logoColor=white)](https://jack21-21.github.io/spotify-swipe/)
 [![Platform](https://img.shields.io/badge/Platform-Mobile%20%7C%20Desktop%20PC-blue?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
-[![Version](https://img.shields.io/badge/Version-v2.0.0-brightgreen?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
+[![Version](https://img.shields.io/badge/Version-v2.0.1-brightgreen?style=for-the-badge)](https://jack21-21.github.io/spotify-swipe/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey?style=for-the-badge)](LICENSE)
 
 > **Curate your dream Spotify playlists by swiping.** Fast, tactile, and addictive. Swipe right to add songs directly to your Spotify playlist; swipe left to pass.

@@ -43,11 +43,11 @@ const MobileApp = (() => {
     ERR_NET_001: { code: 'ERR_NET_001', msg: 'Device is offline. Check your internet connection.' }
   };
 
-  function triggerError(errKey, customDetail = '') {
+  function triggerError(errKey, customDetail = '', actionText = '', onAction = null) {
     const err = ERROR_CODES[errKey] || { code: 'ERR_UNKNOWN', msg: customDetail || 'An error occurred' };
     const displayMsg = customDetail ? `[${err.code}] ${customDetail}` : `[${err.code}] ${err.msg}`;
     console.warn(`[SpotifySwipe Error] ${displayMsg}`);
-    showToast(displayMsg, '⚠️');
+    showToast(displayMsg, '⚠️', actionText, onAction);
     return err;
   }
 
@@ -62,6 +62,7 @@ const MobileApp = (() => {
   };
   let existingTrackIds = new Set();
   let allUserPlaylists = [];
+  let hasWritePermissionError = false;
 
   // Session deduplication & Adaptive recommendation
   const sessionSeenTrackKeys = new Set();
@@ -226,6 +227,7 @@ const MobileApp = (() => {
         if (refreshToken) {
           localStorage.setItem('swipemobile_refresh_token', refreshToken);
         }
+        hasWritePermissionError = false;
         window.history.replaceState(null, '', window.location.pathname);
         showToast('Connected with Spotify!', '💚');
         return true;
@@ -272,6 +274,7 @@ const MobileApp = (() => {
         }
         localStorage.setItem('swipemobile_expires_at', String(Date.now() + data.expires_in * 1000));
         localStorage.removeItem('swipemobile_code_verifier');
+        hasWritePermissionError = false;
         showToast('Successfully logged in!', '💚');
         return true;
       } else {
@@ -702,14 +705,14 @@ const MobileApp = (() => {
     if (!playlistId) return [];
     try {
       const data = await spotifyApi(`/playlists/${playlistId}/tracks?limit=100`);
-      existingTrackIds.clear();
-      const tracks = [];
+      const remoteTracks = [];
 
       (data.items || []).forEach(item => {
         if (!item || !item.track) return;
         const t = item.track;
+        if (!t || !t.id) return;
         existingTrackIds.add(t.id);
-        tracks.push({
+        remoteTracks.push({
           id: t.id,
           uri: t.uri,
           name: t.name,
@@ -722,13 +725,26 @@ const MobileApp = (() => {
         });
       });
 
-      activePlaylist.tracks = tracks;
+      // Combine remote tracks with any locally queued songs
+      const combined = [...remoteTracks];
+      const seenIds = new Set(remoteTracks.map(r => r.id));
+      (activePlaylist.tracks || []).forEach(localTrack => {
+        if (localTrack && localTrack.id && !seenIds.has(localTrack.id)) {
+          seenIds.add(localTrack.id);
+          existingTrackIds.add(localTrack.id);
+          combined.push(localTrack);
+        }
+      });
+
+      activePlaylist.tracks = combined;
+      saveActivePlaylistMeta();
       updatePlaylistStatsUi();
       renderDrawerTracks();
-      return tracks;
+      renderDesktopQueue();
+      return combined;
     } catch (e) {
       console.warn('[Spotify] Load playlist tracks error:', e);
-      return [];
+      return activePlaylist.tracks || [];
     }
   }
 
@@ -736,34 +752,34 @@ const MobileApp = (() => {
     if (!userProfile) await loadUserProfile();
     if (!userProfile) throw new Error('Please login with Spotify to create playlists.');
 
+    const preservedTracks = Array.isArray(activePlaylist.tracks) ? [...activePlaylist.tracks] : [];
+
     let newPl;
     try {
-      newPl = await spotifyApi('/me/playlists', {
+      newPl = await spotifyApi(`/users/${userProfile.id}/playlists`, {
         method: 'POST',
         body: JSON.stringify({
-          name: name || 'Spotify Swipe Mobile 2026',
-          description: 'Curated on my phone with Spotify Swipe 💚',
+          name: name || 'Spotify Swipe Jams',
+          description: 'Curated with Spotify Swipe 💚',
           public: false
         })
       });
     } catch (err) {
-      newPl = await spotifyApi(`/users/${userProfile.id}/playlists`, {
+      newPl = await spotifyApi('/me/playlists', {
         method: 'POST',
         body: JSON.stringify({
-          name: name || 'Spotify Swipe Mobile 2026',
-          description: 'Curated on my phone with Spotify Swipe 💚'
+          name: name || 'Spotify Swipe Jams',
+          description: 'Curated with Spotify Swipe 💚',
+          public: false
         })
       });
     }
 
-    activePlaylist = {
-      id: newPl.id,
-      name: newPl.name,
-      owner: newPl.owner,
-      url: newPl.external_urls?.spotify,
-      tracks: []
-    };
-    existingTrackIds.clear();
+    activePlaylist.id = newPl.id;
+    activePlaylist.name = newPl.name;
+    activePlaylist.owner = newPl.owner;
+    activePlaylist.url = newPl.external_urls?.spotify;
+    activePlaylist.tracks = preservedTracks;
     saveActivePlaylistMeta();
     updatePlaylistStatsUi();
 
@@ -886,29 +902,43 @@ const MobileApp = (() => {
             body: JSON.stringify({ uris: chunk })
           });
         }
+        hasWritePermissionError = false;
+        renderDesktopQueue();
         showToast(`Synced ${uris.length} tracks to Spotify "${activePlaylist.name}"!`, '🎉');
         vibrate(50);
       } catch (addErr) {
         if (isForbiddenError(addErr) || (addErr.message && addErr.message.includes('404'))) {
-          showToast('Selected playlist is not editable. Auto-syncing to your "Spotify Swipe Jams"...', 'ℹ️');
-          const fallbackPl = await createSpotifyPlaylist('Spotify Swipe Jams');
-          for (let i = 0; i < uris.length; i += 50) {
-            const chunk = uris.slice(i, i + 50);
-            await spotifyApi(`/playlists/${fallbackPl.id}/tracks`, {
-              method: 'POST',
-              body: JSON.stringify({ uris: chunk })
-            });
+          try {
+            const fallbackPl = await createSpotifyPlaylist('Spotify Swipe Jams');
+            for (let i = 0; i < uris.length; i += 50) {
+              const chunk = uris.slice(i, i + 50);
+              await spotifyApi(`/playlists/${fallbackPl.id}/tracks`, {
+                method: 'POST',
+                body: JSON.stringify({ uris: chunk })
+              });
+            }
+            hasWritePermissionError = false;
+            showToast(`Synced ${uris.length} tracks to your "Spotify Swipe Jams"!`, '🎉');
+            vibrate(50);
+            renderDesktopQueue();
+          } catch (fbErr) {
+            if (isForbiddenError(fbErr)) {
+              hasWritePermissionError = true;
+              renderDesktopQueue();
+              triggerError('ERR_SPOTIFY_403', 'Write access required. Click below to grant permissions.', 'Grant Access', () => loginWithSpotify());
+            } else {
+              throw fbErr;
+            }
           }
-          showToast(`Synced ${uris.length} tracks to your "Spotify Swipe Jams"!`, '🎉');
-          vibrate(50);
-          renderDesktopQueue();
         } else {
           throw addErr;
         }
       }
     } catch (e) {
       if (isForbiddenError(e)) {
-        triggerError('ERR_SPOTIFY_403', `Spotify write permission needed. Click "Connect" to approve permissions.`);
+        hasWritePermissionError = true;
+        renderDesktopQueue();
+        triggerError('ERR_SPOTIFY_403', 'Write access required. Click below to grant permissions.', 'Grant Access', () => loginWithSpotify());
       } else {
         triggerError('ERR_SPOTIFY_403', `Sync notice: ${e.message}`);
       }
@@ -922,7 +952,7 @@ const MobileApp = (() => {
       return false;
     }
 
-    // Always record locally in active playlist
+    // 1. Always record locally in active playlist and display in sidebar
     existingTrackIds.add(track.id);
     activePlaylist.tracks.push(track);
     saveActivePlaylistMeta();
@@ -938,8 +968,8 @@ const MobileApp = (() => {
 
     const token = await getValidAccessToken();
     if (!token) {
-      triggerError('ERR_AUTH_001', `Saved in queue! Connect Spotify to sync to your account.`);
-      return false;
+      showToast(`Saved "${track.name}" in queue!`, '💚', 'Connect', () => loginWithSpotify());
+      return true;
     }
 
     try {
@@ -973,18 +1003,29 @@ const MobileApp = (() => {
               uris: [trackUri]
             })
           });
+          hasWritePermissionError = false;
           showToast(`Added "${track.name}" to Spotify "${activePlaylist.name}"!`, '💚');
           return true;
         } catch (addErr) {
           if (isForbiddenError(addErr) || (addErr.message && addErr.message.includes('404'))) {
-            const fallbackPl = await createSpotifyPlaylist('Spotify Swipe Jams');
-            await spotifyApi(`/playlists/${fallbackPl.id}/tracks`, {
-              method: 'POST',
-              body: JSON.stringify({ uris: [trackUri] })
-            });
-            showToast(`Added "${track.name}" to your "Spotify Swipe Jams"!`, '🎉');
-            renderDesktopQueue();
-            return true;
+            try {
+              const fallbackPl = await createSpotifyPlaylist('Spotify Swipe Jams');
+              await spotifyApi(`/playlists/${fallbackPl.id}/tracks`, {
+                method: 'POST',
+                body: JSON.stringify({ uris: [trackUri] })
+              });
+              hasWritePermissionError = false;
+              showToast(`Added "${track.name}" to your "Spotify Swipe Jams"!`, '🎉');
+              renderDesktopQueue();
+              return true;
+            } catch (fbErr) {
+              if (isForbiddenError(fbErr)) {
+                hasWritePermissionError = true;
+                renderDesktopQueue();
+                triggerError('ERR_SPOTIFY_403', 'Write access required to auto-add to Spotify.', 'Grant Access', () => loginWithSpotify());
+                return true;
+              }
+            }
           }
           throw addErr;
         }
@@ -992,16 +1033,13 @@ const MobileApp = (() => {
     } catch (e) {
       console.warn('[Spotify] Playlist sync warning:', e);
       if (isForbiddenError(e)) {
-        triggerError('ERR_SPOTIFY_403', `Playlist write permission needed. Click "Connect" to approve permissions.`);
+        hasWritePermissionError = true;
+        renderDesktopQueue();
+        triggerError('ERR_SPOTIFY_403', 'Write access required to auto-add to Spotify.', 'Grant Access', () => loginWithSpotify());
       } else {
-        triggerError('ERR_SPOTIFY_403', `Spotify sync notice: ${e.message}`);
+        showToast(`Saved "${track.name}" in queue!`, '💚');
       }
-      return false;
-    }
-
-    return true;
-  }
-      return false;
+      return true;
     }
 
     return true;
@@ -1864,6 +1902,7 @@ const MobileApp = (() => {
         owner: activePlaylist.owner,
         collaborative: activePlaylist.collaborative
       }));
+      localStorage.setItem('swipemobile_queued_tracks', JSON.stringify(activePlaylist.tracks || []));
     } catch (e) {}
   }
 
@@ -1874,10 +1913,20 @@ const MobileApp = (() => {
         const parsed = JSON.parse(saved);
         if (parsed.id) {
           activePlaylist.id = parsed.id;
-          activePlaylist.name = parsed.name || 'Swipe Playlist';
+          activePlaylist.name = parsed.name || 'Spotify Swipe Jams';
           activePlaylist.url = parsed.url;
           activePlaylist.owner = parsed.owner || null;
           activePlaylist.collaborative = parsed.collaborative || false;
+        }
+      }
+      const savedTracks = localStorage.getItem('swipemobile_queued_tracks');
+      if (savedTracks) {
+        const parsedTracks = JSON.parse(savedTracks);
+        if (Array.isArray(parsedTracks) && parsedTracks.length > 0) {
+          activePlaylist.tracks = parsedTracks;
+          parsedTracks.forEach(t => {
+            if (t && t.id) existingTrackIds.add(t.id);
+          });
         }
       }
     } catch (e) {}
@@ -2038,17 +2087,27 @@ const MobileApp = (() => {
       metaEl.textContent = `${activePlaylist.tracks.length} songs • ${mins} mins • Auto-sync`;
     }
 
+    const permBannerHtml = hasWritePermissionError ? `
+      <div class="queue-permission-alert" id="queue-perm-banner">
+        <strong>🔒 Spotify Write Permission Needed</strong>
+        <span>Authorize playlist write access so Spotify Swipe can add songs directly to your Spotify account.</span>
+        <button class="q-perm-btn" id="btn-perm-auth-act">🔑 Authorize Full Access</button>
+      </div>
+    ` : '';
+
     if (activePlaylist.tracks.length === 0) {
       list.innerHTML = `
+        ${permBannerHtml}
         <div class="queue-empty">
           <p>No songs swiped yet</p>
           <span>Press → or Swipe Right on songs you love to build this playlist.</span>
         </div>
       `;
+      $('#btn-perm-auth-act')?.addEventListener('click', () => loginWithSpotify());
       return;
     }
 
-    list.innerHTML = activePlaylist.tracks.map((t, idx) => `
+    list.innerHTML = permBannerHtml + activePlaylist.tracks.map((t, idx) => `
       <div class="queue-row" data-id="${t.id}">
         <span class="q-num">${idx + 1}</span>
         <img src="${t.cover_url || ''}" alt="" class="q-thumb" />
@@ -2060,6 +2119,8 @@ const MobileApp = (() => {
         <button class="q-remove-btn" data-id="${t.id}" data-uri="${t.uri || ''}" data-name="${escapeHtml(t.name)}" title="Remove song">✕</button>
       </div>
     `).join('');
+
+    $('#btn-perm-auth-act')?.addEventListener('click', () => loginWithSpotify());
 
     list.querySelectorAll('.q-spotify-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -2163,14 +2224,33 @@ const MobileApp = (() => {
     }
   }
 
-  function showToast(msg, icon = '🎵') {
+  function showToast(msg, icon = '🎵', actionText = '', onAction = null) {
     const toast = $('#toast');
     if (!toast) return;
-    toast.querySelector('.toast-icon').textContent = icon;
-    toast.querySelector('.toast-text').textContent = msg;
+    const iconEl = toast.querySelector('.toast-icon');
+    const textEl = toast.querySelector('.toast-text');
+    if (iconEl) iconEl.textContent = icon;
+    if (textEl) textEl.textContent = msg;
+
+    const oldBtn = toast.querySelector('.toast-action-btn');
+    if (oldBtn) oldBtn.remove();
+
+    if (actionText && typeof onAction === 'function') {
+      const btn = document.createElement('button');
+      btn.className = 'toast-action-btn';
+      btn.textContent = actionText;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toast.classList.remove('show');
+        onAction();
+      });
+      toast.appendChild(btn);
+    }
+
     toast.classList.add('show');
     clearTimeout(toast._timeout);
-    toast._timeout = setTimeout(() => toast.classList.remove('show'), 2600);
+    const duration = actionText ? 5000 : 2800;
+    toast._timeout = setTimeout(() => toast.classList.remove('show'), duration);
   }
 
   function showLoading(show) {
@@ -2227,14 +2307,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=2.0.0').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=2.0.1').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v2.0.0 installed! Auto-refreshing...');
-                showToast('App updated to v2.0.0! Refreshing...', '🚀');
+                console.log('[PWA] New version v2.0.1 installed! Auto-refreshing...');
+                showToast('App updated to v2.0.1! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
