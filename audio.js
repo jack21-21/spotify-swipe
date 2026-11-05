@@ -1,122 +1,151 @@
 /**
- * Spotify Swipe Mobile — Audio Preview Engine & Frequency Analyser
- * Robust mobile audio player with pre-buffering, user gesture unlocking,
- * and built-in synthesizer fallback for mobile browsers (Android / iOS).
+ * Spotify Swipe Mobile — High-Fidelity Audio Preview Engine
+ * Real Music Audio Player optimized for mobile browsers (Android / iOS / Samsung).
+ * Zero synthetic beeps — only authentic studio music previews & Spotify playback.
  */
 
 'use strict';
 
 const AudioManager = (() => {
+  // Mobile-compatible HTML5 Audio Element
   const audio = new Audio();
-  audio.crossOrigin = 'anonymous';
   audio.preload = 'auto';
+  // Note: Do not set crossOrigin = 'anonymous' unless using Web Audio AnalyserNode,
+  // as Apple and CDN audio servers may reject or fail on CORS media headers.
 
-  let audioCtx = null;
-  let synthOsc = null;
-  let synthGain = null;
-  let synthInterval = null;
+  // 44-byte valid silent WAV data URI to unlock mobile audio pipeline without errors
+  const SILENT_BUFFER_DATA_URI = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
 
   let currentTrack = null;
   let isPlaying = false;
   let isMuted = false;
   let volume = 0.85;
+  let isUnlocked = false;
 
   const onTimeUpdateCallbacks = [];
   const onStateChangeCallbacks = [];
+  const onErrorCallbacks = [];
 
-  // Mobile audio unlocking
-  let isUnlocked = false;
+  /**
+   * Prime & unlock the mobile HTML5 audio engine on user touch.
+   * Mobile browsers (Android Chrome, iOS Safari) require an initial user gesture.
+   */
   function unlockMobileAudio() {
     if (isUnlocked) return;
-    const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
-    if (AudioCtxClass && !audioCtx) {
-      audioCtx = new AudioCtxClass();
-    }
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-    // Prime HTML5 Audio element with an empty silent buffer
     try {
-      audio.play().catch(() => {});
-      audio.pause();
+      audio.src = SILENT_BUFFER_DATA_URI;
+      const p = audio.play();
+      if (p !== undefined) {
+        p.then(() => {
+          audio.pause();
+          isUnlocked = true;
+        }).catch(() => {});
+      }
     } catch (e) {}
-
-    isUnlocked = true;
   }
 
-  // Bind to any user touch
+  // Bind to any first user touch on the screen
   window.addEventListener('touchstart', unlockMobileAudio, { once: true, passive: true });
-  window.addEventListener('click', unlockMobileAudio, { once: true, passive: true });
   window.addEventListener('pointerdown', unlockMobileAudio, { once: true, passive: true });
+  window.addEventListener('click', unlockMobileAudio, { once: true, passive: true });
+
+  /* ---------------------------- Audio Event Handlers ---------------------------- */
 
   audio.addEventListener('play', () => {
+    // Ignore play events from silent buffer priming
+    if (audio.src.startsWith('data:audio/wav')) return;
+    isPlaying = true;
+    notifyStateChange();
+  });
+
+  audio.addEventListener('playing', () => {
+    if (audio.src.startsWith('data:audio/wav')) return;
     isPlaying = true;
     notifyStateChange();
   });
 
   audio.addEventListener('pause', () => {
+    if (audio.src.startsWith('data:audio/wav')) return;
     isPlaying = false;
-    stopSynthFallback();
     notifyStateChange();
   });
 
   audio.addEventListener('ended', () => {
+    // Loop the 30-second preview smoothly while on the card
     audio.currentTime = 0;
     audio.play().catch(() => {});
   });
 
   audio.addEventListener('timeupdate', () => {
+    if (audio.src.startsWith('data:audio/wav')) return;
     const cur = audio.currentTime || 0;
     const dur = audio.duration || 30;
-    const progress = dur > 0 ? (cur / dur) : 0;
+    const progress = dur > 0 ? Math.min(1, cur / dur) : 0;
     onTimeUpdateCallbacks.forEach(cb => cb(cur, dur, progress));
   });
 
   audio.addEventListener('error', (e) => {
-    console.warn('[Audio] Source playback failed, using synth preview fallback:', e);
-    startSynthFallback();
+    if (audio.src.startsWith('data:audio/wav')) return;
+    console.warn('[Audio] Playback error on source:', audio.src, e);
+    isPlaying = false;
+    notifyStateChange();
+    onErrorCallbacks.forEach(cb => cb(e, currentTrack));
   });
 
   function notifyStateChange() {
     onStateChangeCallbacks.forEach(cb => cb(isPlaying, currentTrack));
   }
 
+  /* ---------------------------- Public Playback Methods ---------------------------- */
+
   /**
-   * Plays track audio preview immediately.
+   * Plays a track's audio preview immediately with real audio.
    */
   function playTrack(track, autoPlay = true) {
     unlockMobileAudio();
     currentTrack = track;
-    stopSynthFallback();
 
-    if (!track.preview_url) {
-      if (autoPlay) {
-        startSynthFallback();
-      }
+    if (!track || !track.preview_url) {
+      isPlaying = false;
+      notifyStateChange();
       return;
     }
 
-    audio.src = track.preview_url;
-    audio.currentTime = 0;
-    audio.volume = isMuted ? 0 : volume;
+    // If already playing this exact track, resume if paused
+    if (audio.src === track.preview_url && !audio.paused) {
+      isPlaying = true;
+      notifyStateChange();
+      return;
+    }
 
-    if (autoPlay) {
-      const p = audio.play();
-      if (p !== undefined) {
-        p.then(() => {
-          isPlaying = true;
-          notifyStateChange();
-        }).catch(err => {
-          console.warn('[Audio] Browser restricted autoplay, falling back to synth preview:', err);
-          startSynthFallback();
-        });
+    try {
+      audio.src = track.preview_url;
+      audio.currentTime = 0;
+      audio.volume = isMuted ? 0 : volume;
+
+      if (autoPlay) {
+        const p = audio.play();
+        if (p !== undefined) {
+          p.then(() => {
+            isPlaying = true;
+            notifyStateChange();
+          }).catch(err => {
+            console.warn('[Audio] Autoplay paused by mobile browser policy:', err.message);
+            isPlaying = false;
+            notifyStateChange();
+          });
+        }
       }
+    } catch (err) {
+      console.warn('[Audio] Error setting audio source:', err);
+      isPlaying = false;
+      notifyStateChange();
     }
   }
 
   function togglePlayPause() {
     unlockMobileAudio();
-    if (isPlaying) {
+    if (isPlaying && !audio.paused) {
       pause();
     } else {
       resume();
@@ -124,8 +153,9 @@ const AudioManager = (() => {
   }
 
   function pause() {
-    audio.pause();
-    stopSynthFallback();
+    try {
+      audio.pause();
+    } catch (e) {}
     isPlaying = false;
     notifyStateChange();
   }
@@ -133,89 +163,32 @@ const AudioManager = (() => {
   function resume() {
     unlockMobileAudio();
     if (currentTrack && currentTrack.preview_url) {
-      audio.src = currentTrack.preview_url;
-      audio.play().then(() => {
-        isPlaying = true;
-        notifyStateChange();
-      }).catch(err => {
-        console.warn('[Audio] Resume blocked:', err);
-        startSynthFallback();
-      });
-    } else {
-      startSynthFallback();
+      if (audio.src !== currentTrack.preview_url) {
+        audio.src = currentTrack.preview_url;
+      }
+      audio.volume = isMuted ? 0 : volume;
+      const p = audio.play();
+      if (p !== undefined) {
+        p.then(() => {
+          isPlaying = true;
+          notifyStateChange();
+        }).catch(err => {
+          console.warn('[Audio] Resume blocked:', err);
+        });
+      }
     }
   }
 
   function setVolume(val) {
     volume = Math.max(0, Math.min(1, val));
     audio.volume = isMuted ? 0 : volume;
-    if (synthGain) {
-      synthGain.gain.value = volume * 0.15;
-    }
   }
 
   function seek(progress) {
     const dur = audio.duration || 30;
-    audio.currentTime = Math.max(0, Math.min(dur, progress * dur));
-  }
-
-  /**
-   * Melodic synth preview fallback using Web Audio API when streaming audio is blocked
-   */
-  function startSynthFallback() {
-    unlockMobileAudio();
-    stopSynthFallback();
-    if (!audioCtx) return;
-
-    isPlaying = true;
-    notifyStateChange();
-
     try {
-      synthGain = audioCtx.createGain();
-      synthGain.gain.value = volume * 0.14;
-      synthGain.connect(audioCtx.destination);
-
-      const notes = [220, 261.63, 293.66, 329.63, 392, 440];
-      let step = 0;
-      let startTime = audioCtx.currentTime;
-
-      synthInterval = setInterval(() => {
-        if (!isPlaying) {
-          stopSynthFallback();
-          return;
-        }
-
-        const osc = audioCtx.createOscillator();
-        const noteGain = audioCtx.createGain();
-        const freq = notes[step % notes.length];
-        step++;
-
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-
-        noteGain.gain.setValueAtTime(synthGain.gain.value, audioCtx.currentTime);
-        noteGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
-
-        osc.connect(noteGain);
-        noteGain.connect(audioCtx.destination);
-
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.38);
-
-        // Update progress callback
-        const elapsed = (audioCtx.currentTime - startTime) % 30;
-        onTimeUpdateCallbacks.forEach(cb => cb(elapsed, 30, elapsed / 30));
-      }, 400);
-    } catch (e) {
-      console.warn('[Audio] Synth fallback error:', e);
-    }
-  }
-
-  function stopSynthFallback() {
-    if (synthInterval) {
-      clearInterval(synthInterval);
-      synthInterval = null;
-    }
+      audio.currentTime = Math.max(0, Math.min(dur, progress * dur));
+    } catch (e) {}
   }
 
   return {
@@ -227,10 +200,11 @@ const AudioManager = (() => {
     resume,
     setVolume,
     seek,
-    isPlaying: () => isPlaying,
+    isPlaying: () => isPlaying && !audio.paused,
     getCurrentTrack: () => currentTrack,
     onTimeUpdate: (cb) => onTimeUpdateCallbacks.push(cb),
     onStateChange: (cb) => onStateChangeCallbacks.push(cb),
+    onError: (cb) => onErrorCallbacks.push(cb),
     unlockMobileAudio
   };
 })();
