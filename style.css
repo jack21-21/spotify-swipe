@@ -1912,7 +1912,6 @@ html, body {
 
 /* Strictly hide desktop-only controls on phones and touch screens */
 .desktop-only,
-.desktop-volume-control,
 .desktop-version-bar,
 .desktop-sync-btn,
 .desktop-queue-panel,
@@ -1924,12 +1923,10 @@ html, body {
 
 @media (pointer: coarse), (hover: none) {
   body .desktop-only,
-  body .desktop-volume-control,
   body .desktop-version-bar,
   body .desktop-sync-btn,
   body .desktop-queue-panel,
   body .desktop-keyboard-hints,
-  body #desktop-volume-control,
   body #btn-desktop-sync {
     display: none !important;
     visibility: hidden !important;
@@ -1938,13 +1935,11 @@ html, body {
 }
 
 .is-mobile .desktop-only,
-.is-mobile .desktop-volume-control,
 .is-mobile .desktop-version-bar,
 .is-mobile .desktop-sync-btn,
 .is-mobile .desktop-queue-panel,
 .is-mobile .desktop-keyboard-hints,
 .is-mobile-device .desktop-only,
-.is-mobile-device .desktop-volume-control,
 .is-mobile-device .desktop-version-bar,
 .is-mobile-device .desktop-sync-btn,
 .is-mobile-device .desktop-queue-panel,
@@ -2477,79 +2472,6 @@ html, body {
     color: #000 !important;
     box-shadow: 0 0 16px rgba(30, 215, 96, 0.45);
     transform: scale(1.02);
-  }
-
-  body:not(.is-mobile) .desktop-volume-control {
-    display: inline-flex !important;
-    align-items: center;
-    gap: 8px;
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 999px;
-    padding: 4px 12px;
-    height: 34px;
-    margin-right: 6px;
-    transition: all 0.25s ease;
-  }
-
-  body:not(.is-mobile) .desktop-volume-control:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(30, 215, 96, 0.5);
-    box-shadow: 0 0 12px rgba(30, 215, 96, 0.25);
-  }
-
-  .desktop-vol-btn {
-    background: none;
-    border: none;
-    color: #fff;
-    cursor: pointer;
-    font-size: 0.95rem;
-    padding: 0;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.15s ease;
-  }
-
-  .desktop-vol-btn:hover {
-    transform: scale(1.15);
-  }
-
-  .desktop-vol-slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 80px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.22);
-    border-radius: 999px;
-    outline: none;
-    cursor: pointer;
-  }
-
-  .desktop-vol-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #1ed760;
-    cursor: pointer;
-    box-shadow: 0 0 8px rgba(30, 215, 96, 0.8);
-    transition: transform 0.15s ease;
-  }
-
-  .desktop-vol-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.25);
-  }
-
-  .desktop-vol-label {
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: #cbd5e1;
-    min-width: 30px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
   }
 
   body:not(.is-mobile) .desktop-keyboard-hints {
