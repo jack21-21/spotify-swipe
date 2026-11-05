@@ -210,6 +210,44 @@ html, body {
   color: var(--text-muted);
 }
 
+.source-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.source-pill-btn:hover {
+  background: rgba(30, 215, 96, 0.16);
+  border-color: rgba(30, 215, 96, 0.45);
+  color: #1ed760;
+  box-shadow: 0 0 14px rgba(30, 215, 96, 0.25);
+}
+
+.source-pill-btn:active {
+  transform: scale(0.96);
+}
+
+.source-icon {
+  font-size: 0.85rem;
+}
+
+.source-label {
+  letter-spacing: 0.2px;
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -1216,6 +1254,86 @@ html, body {
   letter-spacing: 0.5px;
   color: var(--text-muted);
   margin-bottom: 8px;
+}
+
+/* Discovery Source Grid */
+.source-selector-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+@media (min-width: 600px) {
+  .source-selector-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.source-card-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: inherit;
+}
+
+.source-card-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.source-card-btn.active {
+  background: rgba(30, 215, 96, 0.12);
+  border-color: #1ed760;
+  box-shadow: 0 0 16px rgba(30, 215, 96, 0.22);
+}
+
+.src-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.src-badge-icon {
+  font-size: 1.15rem;
+}
+
+.src-status-pill {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+
+.source-card-btn.active .src-status-pill {
+  background: #1ed760;
+  color: #000;
+  font-weight: 800;
+}
+
+.source-card-btn strong {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.source-card-btn p {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.35;
 }
 
 .playlist-cards-list {

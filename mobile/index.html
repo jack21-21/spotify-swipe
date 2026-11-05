@@ -9,13 +9,13 @@
   <meta name="apple-mobile-web-app-title" content="SpotifySwipe">
   <meta name="description" content="Tinder-style Spotify playlist maker with physical media frames and real music previews">
   
-  <title>Spotify Swipe v1.2.3</title>
+  <title>Spotify Swipe v1.2.4</title>
   
-  <link rel="manifest" href="manifest.json?v=1.2.3">
+  <link rel="manifest" href="manifest.json?v=1.2.4">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   
-  <link rel="stylesheet" href="style.css?v=1.2.3">
+  <link rel="stylesheet" href="style.css?v=1.2.4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -33,16 +33,21 @@
         <div class="app-logo">
           <img src="icon-192.png" alt="Logo" class="app-logo-icon" />
           <span class="app-title">Swipe</span>
-          <span class="app-version-badge" title="Live Version">v1.2.3</span>
+          <span class="app-version-badge" title="Live Version">v1.2.4</span>
         </div>
       </div>
 
       <div class="header-center">
-        <button class="playlist-pill-btn" id="active-playlist-pill" title="Tap to Select or Create Playlist">
+        <button class="playlist-pill-btn" id="active-playlist-pill" title="Tap to Select Target Playlist">
           <span class="pl-pill-icon">🎧</span>
           <span class="pl-pill-name" id="active-playlist-pill-name">Choose Playlist</span>
           <span class="pl-pill-count" id="header-track-count">0</span>
           <span class="pl-pill-chevron">▾</span>
+        </button>
+
+        <button class="source-pill-btn" id="btn-source-toggle" title="Switch Discovery Music Source: Global Hits vs Spotify">
+          <span class="source-icon" id="source-pill-icon">🔥</span>
+          <span class="source-label" id="source-pill-label">Global Hits</span>
         </button>
       </div>
 
@@ -144,7 +149,7 @@
     </div>
 
     <!-- Desktop Version Bar -->
-    <div class="desktop-version-bar">Spotify Swipe • <span class="badge-v">v1.2.3 Live</span> • Direct Spotify Connect</div>
+    <div class="desktop-version-bar">Spotify Swipe • <span class="badge-v">v1.2.4 Live</span> • Direct Spotify Connect</div>
   </div>
 
   <!-- Mobile-Native Playlist Selector Sheet (Opens on tapping header pill) -->
@@ -154,17 +159,49 @@
       <div class="drawer-drag-pill"></div>
     </div>
     <div class="sheet-header">
-      <h3>Select Target Playlist</h3>
+      <h3>Music Discovery & Playlists</h3>
       <button class="drawer-close-btn" id="btn-close-playlist-selector">✕</button>
     </div>
 
-    <!-- Create New Playlist Row -->
+    <!-- Discovery Music Source Selector -->
+    <div class="sheet-sublabel">DISCOVERY MUSIC SOURCE:</div>
+    <div class="source-selector-grid">
+      <button class="source-card-btn active" data-source="global" id="src-btn-global">
+        <div class="src-card-top">
+          <span class="src-badge-icon">🔥</span>
+          <span class="src-status-pill">100% Matched</span>
+        </div>
+        <strong>Global Trending Hits</strong>
+        <p>50 real chart hits with authentic studio previews & verified covers</p>
+      </button>
+
+      <button class="source-card-btn" data-source="spotify-featured" id="src-btn-spotify-featured">
+        <div class="src-card-top">
+          <span class="src-badge-icon">🟢</span>
+          <span class="src-status-pill">Spotify API</span>
+        </div>
+        <strong>Spotify Top Hits & New</strong>
+        <p>Curated from Spotify's official editorial charts & new releases</p>
+      </button>
+
+      <button class="source-card-btn" data-source="spotify-personal" id="src-btn-spotify-personal">
+        <div class="src-card-top">
+          <span class="src-badge-icon">⭐</span>
+          <span class="src-status-pill">My Profile</span>
+        </div>
+        <strong>My Spotify Favorites</strong>
+        <p>Top tracks and history from your personal Spotify account</p>
+      </button>
+    </div>
+
+    <!-- Target Spotify Playlist Row -->
+    <div class="sheet-sublabel">ADD SWIPED TRACKS TO PLAYLIST:</div>
     <div class="create-playlist-row">
       <input type="text" id="new-playlist-quick-input" placeholder="New Playlist Name (e.g. Jack 2026)" class="sheet-text-input" />
       <button class="sheet-create-btn" id="btn-quick-create-playlist">+ Create</button>
     </div>
 
-    <div class="sheet-sublabel">YOUR SPOTIFY PLAYLISTS:</div>
+    <div class="sheet-sublabel">OR CHOOSE AN EXISTING PLAYLIST:</div>
     <div class="playlist-cards-list" id="playlist-cards-list">
       <div class="sheet-loading">Loading your playlists from Spotify...</div>
     </div>
@@ -256,9 +293,9 @@
         <div class="setting-item version-item">
           <div class="version-row">
             <span>App Version:</span>
-            <span class="version-tag">v1.2.3</span>
+            <span class="version-tag">v1.2.4</span>
           </div>
-          <small class="version-desc">Updated Nov 5 • Full-Screen PC Mode & Auto-Sync Engine</small>
+          <small class="version-desc">Updated Nov 5 • Multi-Source Music Discovery & Spotify Direct Audio</small>
         </div>
 
         <div class="modal-footer-actions">
@@ -278,8 +315,8 @@
   <div id="confetti-container" class="confetti-container"></div>
 
   <!-- Core Scripts -->
-  <script src="theme.js?v=1.2.3"></script>
-  <script src="audio.js?v=1.2.3"></script>
-  <script src="app.js?v=1.2.3"></script>
+  <script src="theme.js?v=1.2.4"></script>
+  <script src="audio.js?v=1.2.4"></script>
+  <script src="app.js?v=1.2.4"></script>
 </body>
 </html>

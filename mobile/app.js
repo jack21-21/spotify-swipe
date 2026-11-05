@@ -361,22 +361,71 @@ const MobileApp = (() => {
     });
   }
 
+  function fetchDeezerChart() {
+    return new Promise((resolve) => {
+      const cbName = 'dz_chart_' + Math.random().toString(36).substring(2, 9);
+      const script = document.createElement('script');
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve([]);
+      }, 5000);
+
+      function cleanup() {
+        clearTimeout(timer);
+        try { delete window[cbName]; } catch (e) { window[cbName] = undefined; }
+        script.remove();
+      }
+
+      window[cbName] = (data) => {
+        cleanup();
+        if (data && data.data && Array.isArray(data.data)) {
+          const list = data.data.map(t => ({
+            id: `dz-${t.id}`,
+            name: t.title,
+            artist: t.artist?.name || 'Unknown Artist',
+            album: t.album?.title || '',
+            year: t.album?.release_date ? t.album.release_date.split('-')[0] : '2025',
+            total_tracks: 1,
+            cover_url: t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '',
+            preview_url: t.preview,
+            duration_ms: (t.duration || 30) * 1000,
+            spotify_url: null,
+            plays: Math.floor(Math.random() * 45) + 20,
+            bpm: Math.floor(Math.random() * 35) + 110
+          }));
+          resolve(list);
+        } else {
+          resolve([]);
+        }
+      };
+
+      script.onerror = () => {
+        cleanup();
+        resolve([]);
+      };
+
+      script.src = `https://api.deezer.com/chart/0/tracks?limit=50&output=jsonp&callback=${cbName}`;
+      document.head.appendChild(script);
+    });
+  }
+
   function isPreviewMatch(item, expectedTitle, expectedArtist) {
     if (!item) return false;
-    const itemTitle = (item.trackName || item.title || '').toLowerCase().replace(/[^\w\s]/g, '');
-    const itemArtist = (item.artistName || item.artist?.name || '').toLowerCase().replace(/[^\w\s]/g, '');
-    const cleanExpectedTitle = (expectedTitle || '').toLowerCase().replace(/[^\w\s]/g, '');
-    const cleanExpectedArtist = (expectedArtist || '').toLowerCase().replace(/[^\w\s]/g, '');
+    const itemTitle = (item.trackName || item.title || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const itemArtist = (item.artistName || item.artist?.name || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const cleanExpectedTitle = (expectedTitle || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const cleanExpectedArtist = (expectedArtist || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
-    // Primary artist name must match
+    // Primary artist token match
     const firstArtist = cleanExpectedArtist.split(/[,&]/)[0].trim();
     const artistOk = itemArtist.includes(firstArtist) || firstArtist.includes(itemArtist);
+    if (!artistOk) return false;
 
-    // Title must share key words
-    const titleWords = cleanExpectedTitle.split(/\s+/).filter(w => w.length > 2);
-    const titleOk = titleWords.length === 0 || titleWords.some(w => itemTitle.includes(w)) || itemTitle.includes(cleanExpectedTitle) || cleanExpectedTitle.includes(itemTitle);
-
-    return artistOk && titleOk;
+    // Both titles must have at least 70% word overlap
+    const titleWords = cleanExpectedTitle.split(' ').filter(w => w.length > 2);
+    if (titleWords.length === 0) return true;
+    const matchedCount = titleWords.filter(w => itemTitle.includes(w)).length;
+    return (matchedCount / titleWords.length) >= 0.70;
   }
 
   async function resolvePreviewUrl(track) {
@@ -406,7 +455,7 @@ const MobileApp = (() => {
       console.warn('[Preview] iTunes search error:', e);
     }
 
-    // Tier 2: Deezer MP3 preview
+    // Tier 2: Deezer MP3 preview with strict validation
     try {
       const pUrl = await fetchDeezerPreview(track.name, track.artist);
       if (pUrl) {
@@ -673,8 +722,21 @@ const MobileApp = (() => {
         await getOrCreateDefaultSwipePlaylist();
       }
 
+      // Ensure any missing Spotify URIs from global charts are resolved
+      for (const t of activePlaylist.tracks) {
+        if (!t.uri && (!t.id || t.id.startsWith('dz-') || t.id.startsWith('demo-'))) {
+          try {
+            const q = cleanTrackTitleForSearch(t.name, t.artist);
+            const searchRes = await spotifyApi(`/search?q=${encodeURIComponent(q)}&type=track&limit=1`);
+            if (searchRes.tracks?.items?.[0]) {
+              t.uri = searchRes.tracks.items[0].uri;
+            }
+          } catch (e) {}
+        }
+      }
+
       const uris = activePlaylist.tracks
-        .map(t => t.uri || (t.id && !t.id.startsWith('demo-') ? `spotify:track:${t.id}` : null))
+        .map(t => t.uri || (t.id && !t.id.startsWith('demo-') && !t.id.startsWith('dz-') ? `spotify:track:${t.id}` : null))
         .filter(Boolean);
 
       if (uris.length === 0) {
@@ -727,9 +789,24 @@ const MobileApp = (() => {
       }
 
       if (activePlaylist.id) {
-        const trackUri = track.uri || (track.id && !track.id.startsWith('demo-') ? `spotify:track:${track.id}` : null);
+        let trackUri = track.uri || (track.id && !track.id.startsWith('demo-') && !track.id.startsWith('dz-') ? `spotify:track:${track.id}` : null);
+        
+        // If track is from global chart, search Spotify to find its real Spotify URI!
+        if (!trackUri && token) {
+          try {
+            const q = cleanTrackTitleForSearch(track.name, track.artist);
+            const searchRes = await spotifyApi(`/search?q=${encodeURIComponent(q)}&type=track&limit=1`);
+            if (searchRes.tracks?.items?.[0]) {
+              trackUri = searchRes.tracks.items[0].uri;
+              track.uri = trackUri;
+            }
+          } catch (searchErr) {
+            console.warn('[Spotify Search] Could not find URI:', searchErr);
+          }
+        }
+
         if (!trackUri) {
-          showToast(`Saved demo track "${track.name}" in queue!`, '💚');
+          showToast(`Saved "${track.name}" in queue!`, '💚');
           return true;
         }
 
@@ -823,7 +900,108 @@ const MobileApp = (() => {
     }
   }
 
-  /* ---------------------------- Discovery Engine ---------------------------- */
+  /* ---------------------------- Multi-Source Discovery Engine ---------------------------- */
+
+  let currentDiscoverySource = localStorage.getItem('swipemobile_discovery_source') || 'global';
+
+  function setDiscoverySource(source) {
+    if (!['global', 'spotify-featured', 'spotify-personal'].includes(source)) return;
+    currentDiscoverySource = source;
+    localStorage.setItem('swipemobile_discovery_source', source);
+    updateDiscoverySourceUi();
+    loadDiscoveryDeck();
+    showToast(`Switched to ${source === 'global' ? 'Global Trending' : (source === 'spotify-featured' ? 'Spotify Hits' : 'My Favorites')}`, '✨');
+  }
+
+  function updateDiscoverySourceUi() {
+    const pillIcon = $('#source-pill-icon');
+    const pillLabel = $('#source-pill-label');
+    const srcMap = {
+      'global': { icon: '🔥', label: 'Global Hits' },
+      'spotify-featured': { icon: '🟢', label: 'Spotify Hits' },
+      'spotify-personal': { icon: '⭐', label: 'My Spotify' }
+    };
+    const cur = srcMap[currentDiscoverySource] || srcMap['global'];
+    if (pillIcon) pillIcon.textContent = cur.icon;
+    if (pillLabel) pillLabel.textContent = cur.label;
+
+    document.querySelectorAll('.source-card-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.source === currentDiscoverySource);
+    });
+  }
+
+  async function fetchSpotifyFeaturedDeck() {
+    const pool = [];
+    try {
+      // 1. Featured Playlists (e.g. Today's Top Hits, Pop Rising)
+      const feat = await spotifyApi('/browse/featured-playlists?limit=5');
+      if (feat && feat.playlists?.items?.length > 0) {
+        const topPl = feat.playlists.items[0];
+        const plTracks = await spotifyApi(`/playlists/${topPl.id}/tracks?limit=50`);
+        if (plTracks && plTracks.items) {
+          plTracks.items.forEach(item => {
+            const trk = item.track;
+            if (!trk || !trk.id || existingTrackIds.has(trk.id)) return;
+            pool.push({
+              id: trk.id,
+              uri: trk.uri,
+              name: trk.name,
+              artist: trk.artists?.map(a => a.name).join(', ') || 'Unknown Artist',
+              album: trk.album?.name || '',
+              year: trk.album?.release_date ? trk.album.release_date.split('-')[0] : '',
+              total_tracks: trk.album?.total_tracks || 1,
+              cover_url: trk.album?.images?.[0]?.url || '',
+              preview_url: trk.preview_url,
+              duration_ms: trk.duration_ms,
+              spotify_url: trk.external_urls?.spotify,
+              plays: Math.floor(Math.random() * 45) + 12,
+              bpm: Math.floor(Math.random() * 40) + 105
+            });
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[Spotify] Featured playlist fetch error:', e);
+    }
+    return pool;
+  }
+
+  async function fetchSpotifyPersonalDeck() {
+    const pool = [];
+    try {
+      const [topShort, topMed, recent] = await Promise.allSettled([
+        spotifyApi('/me/top/tracks?limit=50&time_range=short_term'),
+        spotifyApi('/me/top/tracks?limit=50&time_range=medium_term'),
+        spotifyApi('/me/player/recently-played?limit=50')
+      ]);
+
+      function ingest(trk) {
+        if (!trk || !trk.id || existingTrackIds.has(trk.id)) return;
+        pool.push({
+          id: trk.id,
+          uri: trk.uri,
+          name: trk.name,
+          artist: trk.artists?.map(a => a.name).join(', ') || 'Unknown Artist',
+          album: trk.album?.name || '',
+          year: trk.album?.release_date ? trk.album.release_date.split('-')[0] : '',
+          total_tracks: trk.album?.total_tracks || 1,
+          cover_url: trk.album?.images?.[0]?.url || '',
+          preview_url: trk.preview_url,
+          duration_ms: trk.duration_ms,
+          spotify_url: trk.external_urls?.spotify,
+          plays: Math.floor(Math.random() * 45) + 12,
+          bpm: Math.floor(Math.random() * 40) + 105
+        });
+      }
+
+      if (topShort.status === 'fulfilled' && topShort.value?.items) topShort.value.items.forEach(ingest);
+      if (topMed.status === 'fulfilled' && topMed.value?.items) topMed.value.items.forEach(ingest);
+      if (recent.status === 'fulfilled' && recent.value?.items) recent.value.items.forEach(item => ingest(item.track));
+    } catch (e) {
+      console.warn('[Spotify] Personal deck fetch error:', e);
+    }
+    return pool;
+  }
 
   async function loadDiscoveryDeck() {
     if (isLoadingDeck) return;
@@ -832,73 +1010,39 @@ const MobileApp = (() => {
 
     try {
       const token = await getValidAccessToken();
-      if (!token) {
-        showLoading(false);
-        isLoadingDeck = false;
+      let candidateList = [];
+
+      if (currentDiscoverySource === 'spotify-featured' && token) {
+        candidateList = await fetchSpotifyFeaturedDeck();
+      } else if (currentDiscoverySource === 'spotify-personal' && token) {
+        candidateList = await fetchSpotifyPersonalDeck();
+      }
+
+      // If source is 'global' or Spotify endpoints gave empty / not authenticated:
+      if (!candidateList || candidateList.length === 0) {
+        candidateList = await fetchDeezerChart();
+      }
+
+      // If still empty (e.g. offline), fallback to demo tracks
+      if (!candidateList || candidateList.length === 0) {
+        await loadDemoDeck();
         return;
       }
 
-      const [topShort, topMed, recent] = await Promise.allSettled([
-        spotifyApi('/me/top/tracks?limit=50&time_range=short_term'),
-        spotifyApi('/me/top/tracks?limit=50&time_range=medium_term'),
-        spotifyApi('/me/player/recently-played?limit=50')
-      ]);
+      // Deduplicate against active playlist
+      candidateList = candidateList.filter(t => !existingTrackIds.has(t.id));
 
-      const poolMap = new Map();
-
-      function ingest(track) {
-        if (!track || !track.id) return;
-        if (existingTrackIds.has(track.id)) return;
-
-        if (!poolMap.has(track.id)) {
-          const plays = Math.floor(Math.random() * 45) + 12;
-          const year = track.album?.release_date ? track.album.release_date.split('-')[0] : '';
-          const totalTracks = track.album?.total_tracks || 0;
-          poolMap.set(track.id, {
-            id: track.id,
-            uri: track.uri,
-            name: track.name,
-            artist: track.artists?.map(a => a.name).join(', ') || 'Unknown Artist',
-            album: track.album?.name || '',
-            year: year,
-            total_tracks: totalTracks,
-            cover_url: track.album?.images?.[0]?.url || '',
-            preview_url: track.preview_url,
-            duration_ms: track.duration_ms,
-            spotify_url: track.external_urls?.spotify,
-            plays: plays,
-            bpm: Math.floor(Math.random() * 40) + 105,
-            danceability: Math.floor(Math.random() * 30) + 65
-          });
-        }
-      }
-
-      if (topShort.status === 'fulfilled' && topShort.value?.items) {
-        topShort.value.items.forEach(ingest);
-      }
-      if (topMed.status === 'fulfilled' && topMed.value?.items) {
-        topMed.value.items.forEach(ingest);
-      }
-      if (recent.status === 'fulfilled' && recent.value?.items) {
-        recent.value.items.forEach(item => ingest(item.track));
-      }
-
-      let candidateList = Array.from(poolMap.values());
+      // Shuffle
       for (let i = candidateList.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [candidateList[i], candidateList[j]] = [candidateList[j], candidateList[i]];
-      }
-
-      if (candidateList.length === 0) {
-        await loadDemoDeck();
-        return;
       }
 
       deck = candidateList;
       currentIndex = 0;
       history = [];
 
-      // Pre-resolve the first 5 songs in parallel BEFORE rendering so audio is ready!
+      // Pre-resolve the first 5 songs in parallel if any are missing preview_url
       await Promise.all(deck.slice(0, 5).map(trk => resolvePreviewUrl(trk)));
 
       renderCards();
@@ -910,8 +1054,17 @@ const MobileApp = (() => {
       }
     } catch (err) {
       console.error('[Deck] Failed to load deck:', err);
-      showToast('Could not load songs. Showing demo tracks.', 'ℹ️');
-      await loadDemoDeck();
+      const fallbackList = await fetchDeezerChart();
+      if (fallbackList && fallbackList.length > 0) {
+        deck = fallbackList;
+        currentIndex = 0;
+        history = [];
+        renderCards();
+        updateButtonStates();
+        if (autoPlayPreviews) AudioManager.playTrack(deck[0], true);
+      } else {
+        await loadDemoDeck();
+      }
     } finally {
       showLoading(false);
       isLoadingDeck = false;
@@ -1809,14 +1962,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=1.2.3').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=1.2.4').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v1.2.3 installed! Auto-refreshing...');
-                showToast('App updated to v1.2.3! Refreshing...', '🚀');
+                console.log('[PWA] New version v1.2.4 installed! Auto-refreshing...');
+                showToast('App updated to v1.2.4! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
@@ -1826,6 +1979,7 @@ const MobileApp = (() => {
     }
 
     loadSavedActivePlaylist();
+    updateDiscoverySourceUi();
     bindDomEvents();
 
     await handleOAuthCallback();
@@ -1837,11 +1991,12 @@ const MobileApp = (() => {
       if (activePlaylist.id) {
         await loadPlaylistTracks(activePlaylist.id);
       }
-      await loadDiscoveryDeck();
     } else {
       updateAuthUi();
-      await loadDemoDeck();
     }
+    
+    // Load discovery deck (Global trending or Spotify based on active source)
+    await loadDiscoveryDeck();
     renderDesktopQueue();
   }
 
@@ -1852,6 +2007,16 @@ const MobileApp = (() => {
     $('#btn-undo')?.addEventListener('click', () => undoLastSwipe());
     $('#btn-preview-toggle')?.addEventListener('click', () => handlePreviewButtonClick());
     $('#btn-dock-spotify')?.addEventListener('click', () => playFullTrackOnSpotify(deck[currentIndex]));
+
+    // Discovery Source Toggle & Selectors
+    $('#btn-source-toggle')?.addEventListener('click', () => openPlaylistSelectorSheet());
+    document.querySelectorAll('.source-card-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const src = btn.dataset.source;
+        setDiscoverySource(src);
+        closePlaylistSelectorSheet();
+      });
+    });
 
     // Playlist Selector Sheet Openers
     $('#active-playlist-pill')?.addEventListener('click', () => openPlaylistSelectorSheet());
