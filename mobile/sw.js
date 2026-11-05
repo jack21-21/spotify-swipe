@@ -1,10 +1,10 @@
 /**
- * Spotify Swipe PWA Service Worker — v2.1.0
+ * Spotify Swipe PWA Service Worker — v2.1.1
  * Network-First strategy ensures the app always loads the latest code
  * from GitHub Pages, falling back to cache if offline.
  */
 
-const CACHE_NAME = 'spotify-swipe-v2.1.0';
+const CACHE_NAME = 'spotify-swipe-v2.1.1';
 const ASSETS = [
   './',
   './index.html',
@@ -49,8 +49,7 @@ self.addEventListener('fetch', (event) => {
     event.request.url.includes('spotify.com') ||
     event.request.url.includes('scdn.co') ||
     event.request.url.includes('itunes.apple.com') ||
-    event.request.url.includes('deezer.com') ||
-    event.request.url.includes('api.fin21.uk')
+    event.request.url.includes('deezer.com')
   ) {
     return;
   }

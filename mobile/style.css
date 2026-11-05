@@ -2033,9 +2033,9 @@ html, body {
 
   .app-header {
     width: 100%;
-    max-width: 1400px;
-    margin: 0 auto 10px auto;
-    padding: 0 10px;
+    max-width: 1600px;
+    margin: 0 auto 12px auto;
+    padding: 0 16px;
   }
 
   .app-main-workspace {
@@ -2043,9 +2043,9 @@ html, body {
     flex-direction: row !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 40px !important;
+    gap: 48px !important;
     width: 100% !important;
-    max-width: 1400px !important;
+    max-width: 1600px !important;
     margin: 0 auto !important;
     flex: 1 !important;
     min-height: 0 !important;
@@ -2053,7 +2053,7 @@ html, body {
 
   .deck-viewport {
     flex: 1 !important;
-    max-width: 580px !important;
+    max-width: 640px !important;
     height: 100% !important;
     display: flex !important;
     flex-direction: column !important;
@@ -2065,7 +2065,7 @@ html, body {
   .card-deck {
     width: 100% !important;
     height: 100% !important;
-    max-height: 640px !important;
+    max-height: 680px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -2073,81 +2073,84 @@ html, body {
 
   .swipe-card {
     width: 100% !important;
-    max-width: 480px !important;
+    max-width: 520px !important;
     height: 100% !important;
-    max-height: 620px !important;
-    padding: 18px 24px 14px 24px !important;
-    border-radius: 30px !important;
+    max-height: 660px !important;
+    padding: 20px 28px 16px 28px !important;
+    border-radius: 32px !important;
     box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), inset 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
   }
 
   .record-disc {
+    width: 310px !important;
+    height: 310px !important;
+  }
+
+  .vinyl-jacket {
+    width: 275px !important;
+    height: 275px !important;
+    transform: translateX(-30px) !important;
+  }
+
+  .vinyl-lp-disc {
+    width: 265px !important;
+    height: 265px !important;
+    right: 22px !important;
+  }
+
+  .cd-jewel-case {
+    width: 270px !important;
+    height: 270px !important;
+    transform: translateX(-28px) !important;
+  }
+
+  .cd-holographic-disc {
+    width: 260px !important;
+    height: 260px !important;
+    right: 24px !important;
+  }
+
+  .cassette-body {
+    width: 340px !important;
+    height: 215px !important;
+  }
+
+  .physical-frame .frame-border {
     width: 290px !important;
     height: 290px !important;
   }
 
-  .vinyl-jacket {
-    width: 255px !important;
-    height: 255px !important;
-    transform: translateX(-28px) !important;
-  }
-
-  .vinyl-lp-disc {
-    width: 245px !important;
-    height: 245px !important;
-    right: 20px !important;
-  }
-
-  .cd-jewel-case {
-    width: 250px !important;
-    height: 250px !important;
-    transform: translateX(-26px) !important;
-  }
-
-  .cd-holographic-disc {
-    width: 240px !important;
-    height: 240px !important;
-    right: 22px !important;
-  }
-
-  .cassette-body {
-    width: 320px !important;
-    height: 205px !important;
-  }
-
-  .physical-frame .frame-border {
-    width: 270px !important;
-    height: 270px !important;
-  }
-
   .card-track-info .track-title {
-    font-size: 1.45rem !important;
+    font-size: 1.55rem !important;
   }
 
   .card-track-info .track-artist {
-    font-size: 1.05rem !important;
+    font-size: 1.12rem !important;
   }
 
   .action-dock {
     width: 100% !important;
-    max-width: 480px !important;
-    margin: 10px auto 4px auto !important;
+    max-width: 520px !important;
+    margin: 12px auto 4px auto !important;
   }
 
   /* Desktop Live Queue Sidebar */
   .desktop-queue-panel {
     display: flex !important;
     flex-direction: column !important;
-    width: 440px !important;
-    max-width: 440px !important;
+    width: 480px !important;
+    max-width: 520px !important;
     height: 100% !important;
-    max-height: 620px !important;
+    max-height: 660px !important;
     background: rgba(14, 18, 28, 0.75) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    border-radius: 30px !important;
-    padding: 22px !important;
+    border-radius: 32px !important;
+    padding: 24px !important;
     box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
     backdrop-filter: blur(28px) !important;
+    -webkit-backdrop-filter: blur(28px) !important;
+    box-sizing: border-box !important;
+  }
     -webkit-backdrop-filter: blur(28px) !important;
     box-sizing: border-box !important;
   }

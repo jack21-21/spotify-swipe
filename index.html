@@ -9,13 +9,13 @@
   <meta name="apple-mobile-web-app-title" content="SpotifySwipe">
   <meta name="description" content="Tinder-style Spotify playlist maker with physical media frames and real music previews">
   
-  <title>Spotify Swipe v2.1.0 - Mobile & PC Web Player</title>
+  <title>Spotify Swipe v2.1.1 - Mobile & PC Web Player</title>
   
-  <link rel="manifest" href="manifest.json?v=2.1.0">
+  <link rel="manifest" href="manifest.json?v=2.1.1">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   
-  <link rel="stylesheet" href="style.css?v=2.1.0">
+  <link rel="stylesheet" href="style.css?v=2.1.1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -33,7 +33,7 @@
         <div class="app-logo">
           <img src="icon-192.png" alt="Logo" class="app-logo-icon" />
           <span class="app-title">Swipe</span>
-          <span class="app-version-badge" title="Live Version">v2.1.0</span>
+          <span class="app-version-badge" title="Live Version">v2.1.1</span>
         </div>
       </div>
 
@@ -149,7 +149,7 @@
     </div>
 
     <!-- Desktop Version Bar -->
-    <div class="desktop-version-bar">Spotify Swipe • <span class="badge-v">v1.2.5 Live</span> • Direct Spotify Connect</div>
+    <div class="desktop-version-bar">Spotify Swipe • <span class="badge-v">v2.1.1 Live</span> • Direct Spotify Connect</div>
   </div>
 
   <!-- Mobile-Native Playlist Selector Sheet (Opens on tapping header pill) -->
@@ -283,19 +283,22 @@
         <div class="setting-item diagnostics-item">
           <label>Diagnostics & Error Codes</label>
           <div class="error-codes-summary">
-            <div class="err-row"><code>ERR_SPOTIFY_403</code><span>Insufficient permissions or playlist not owned</span></div>
-            <div class="err-row"><code>ERR_AUTH_001</code><span>Not signed into Spotify or token expired</span></div>
-            <div class="err-row"><code>ERR_TRACK_001</code><span>Track already in playlist</span></div>
-            <div class="err-row"><code>ERR_AUDIO_001</code><span>Audio preview unavailable for track</span></div>
+            <div class="err-row"><code>ERR_SPOTIFY_403</code><span>Playlist write permission required (reconnect with write scope)</span></div>
+            <div class="err-row"><code>ERR_SPOTIFY_404</code><span>Playlist or track not found on Spotify</span></div>
+            <div class="err-row"><code>ERR_AUTH_001</code><span>Not signed into Spotify or session expired</span></div>
+            <div class="err-row"><code>ERR_PLAYLIST_001</code><span>Playlist not owned (switched to dedicated Spotify Swipe Jams)</span></div>
+            <div class="err-row"><code>ERR_TRACK_001</code><span>Track already in playlist (duplicate prevented)</span></div>
+            <div class="err-row"><code>ERR_AUDIO_001</code><span>Studio preview unavailable (tap Spotify to stream full song)</span></div>
+            <div class="err-row"><code>ERR_NET_001</code><span>Offline mode active (using cached discovery tracks)</span></div>
           </div>
         </div>
 
         <div class="setting-item version-item">
           <div class="version-row">
             <span>App Version:</span>
-            <span class="version-tag">v2.1.0</span>
+            <span class="version-tag">v2.1.1</span>
           </div>
-          <small class="version-desc">Direct Spotify PKCE, Dynamic Taste Learning & Pure Auto-Discovery</small>
+          <small class="version-desc">Direct Spotify App Credentials, Dynamic Taste Learning & Fullscreen PC</small>
         </div>
 
         <div class="modal-footer-actions">
@@ -315,8 +318,8 @@
   <div id="confetti-container" class="confetti-container"></div>
 
   <!-- Core Scripts -->
-  <script src="theme.js?v=2.1.0"></script>
-  <script src="audio.js?v=2.1.0"></script>
-  <script src="app.js?v=2.1.0"></script>
+  <script src="theme.js?v=2.1.1"></script>
+  <script src="audio.js?v=2.1.1"></script>
+  <script src="app.js?v=2.1.1"></script>
 </body>
 </html>

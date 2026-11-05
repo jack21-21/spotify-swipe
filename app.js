@@ -12,8 +12,9 @@ const MobileApp = (() => {
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  // Spotify PKCE Configuration
+  // Spotify Configuration
   const DEFAULT_CLIENT_ID = '2e9d00e15cc44cffaaba76a52f88e10a';
+  const CLIENT_SECRET = 'e8ba4adf3d6d4f23b998fb1c932d4e63';
   const SCOPES = [
     'user-read-private',
     'user-read-email',
@@ -27,24 +28,30 @@ const MobileApp = (() => {
     'user-read-playback-state'
   ].join(' ');
 
-  // Error Code System
+  // Comprehensive Error Code Reference System
   const ERROR_CODES = {
-    ERR_AUTH_001: { code: 'ERR_AUTH_001', msg: 'Not signed into Spotify. Tap Connect to authorize your account.' },
-    ERR_AUTH_002: { code: 'ERR_AUTH_002', msg: 'Spotify session expired. Re-authorizing...' },
-    ERR_AUTH_003: { code: 'ERR_AUTH_003', msg: 'Spotify authorization was cancelled by user.' },
-    ERR_SPOTIFY_403: { code: 'ERR_SPOTIFY_403', msg: 'Forbidden (403): Cannot edit this playlist or missing scope. Switched to your own playlist.' },
-    ERR_SPOTIFY_404: { code: 'ERR_SPOTIFY_404', msg: 'Playlist or track could not be found on Spotify.' },
-    ERR_SPOTIFY_429: { code: 'ERR_SPOTIFY_429', msg: 'Spotify API rate limit reached. Backing off automatically.' },
-    ERR_PLAYLIST_001: { code: 'ERR_PLAYLIST_001', msg: 'You do not own this playlist. Tracks can only be added to your own playlists.' },
+    ERR_AUTH_001: { code: 'ERR_AUTH_001', msg: 'Not signed into Spotify. Tap Connect to authorize your Spotify account.' },
+    ERR_AUTH_002: { code: 'ERR_AUTH_002', msg: 'Spotify session expired. Re-authorizing your account...' },
+    ERR_AUTH_003: { code: 'ERR_AUTH_003', msg: 'Spotify authorization cancelled by user.' },
+    ERR_AUTH_004: { code: 'ERR_AUTH_004', msg: 'Spotify authorization code exchange failed. Please tap Connect to retry.' },
+    ERR_SPOTIFY_401: { code: 'ERR_SPOTIFY_401', msg: 'Session unauthorized (401). Tap Connect to sign in.' },
+    ERR_SPOTIFY_403: { code: 'ERR_SPOTIFY_403', msg: 'Forbidden (403): Playlist write permission required. Tap Connect to grant access.' },
+    ERR_SPOTIFY_404: { code: 'ERR_SPOTIFY_404', msg: 'Not Found (404): Playlist or track not found on Spotify.' },
+    ERR_SPOTIFY_429: { code: 'ERR_SPOTIFY_429', msg: 'Spotify API rate limit active. Automatically backing off and retrying...' },
+    ERR_PLAYLIST_001: { code: 'ERR_PLAYLIST_001', msg: 'Playlist not owned. Switched to your own Spotify Swipe playlist.' },
     ERR_PLAYLIST_002: { code: 'ERR_PLAYLIST_002', msg: 'Could not create playlist on Spotify. Check account permissions.' },
-    ERR_TRACK_001: { code: 'ERR_TRACK_001', msg: 'Track is already in your playlist!' },
-    ERR_AUDIO_001: { code: 'ERR_AUDIO_001', msg: 'No studio preview found for this track. Tap "Play in Spotify" to listen in full.' },
-    ERR_AUDIO_002: { code: 'ERR_AUDIO_002', msg: 'Browser autoplay blocked. Tap any button to enable audio.' },
+    ERR_PLAYLIST_003: { code: 'ERR_PLAYLIST_003', msg: 'Failed to sync queue to Spotify. Tap Connect to re-verify permissions.' },
+    ERR_TRACK_001: { code: 'ERR_TRACK_001', msg: 'Track already in playlist! Duplicates prevented.' },
+    ERR_TRACK_002: { code: 'ERR_TRACK_002', msg: 'Could not resolve Spotify track URI.' },
+    ERR_AUDIO_001: { code: 'ERR_AUDIO_001', msg: 'Studio preview unavailable. Tap Spotify icon to stream full song.' },
+    ERR_AUDIO_002: { code: 'ERR_AUDIO_002', msg: 'Browser autoplay blocked. Tap any button or card to enable audio.' },
+    ERR_AUDIO_003: { code: 'ERR_AUDIO_003', msg: 'Audio playback failed to decode track. Skipping to next song.' },
+    ERR_DECK_EMPTY: { code: 'ERR_DECK_EMPTY', msg: 'Reached end of deck! Auto-discovering more songs for you...' },
     ERR_NET_001: { code: 'ERR_NET_001', msg: 'Device is offline. Check your internet connection.' }
   };
 
   function triggerError(errKey, customDetail = '', actionText = '', onAction = null) {
-    const err = ERROR_CODES[errKey] || { code: 'ERR_UNKNOWN', msg: customDetail || 'An error occurred' };
+    const err = ERROR_CODES[errKey] || { code: errKey || 'ERR_UNKNOWN', msg: customDetail || 'An error occurred' };
     const displayMsg = customDetail ? `[${err.code}] ${customDetail}` : `[${err.code}] ${err.msg}`;
     console.warn(`[SpotifySwipe Error] ${displayMsg}`);
     showToast(displayMsg, '⚠️', actionText, onAction);
@@ -56,6 +63,37 @@ const MobileApp = (() => {
   if (!clientId || clientId === '3e3a52392ee74be2a7635b15ab54c3c1') {
     clientId = DEFAULT_CLIENT_ID;
     localStorage.setItem('swipemobile_client_id', clientId);
+  }
+
+  let appAccessToken = null;
+  let appTokenExpiresAt = 0;
+
+  async function getSpotifyAppToken() {
+    if (appAccessToken && Date.now() < appTokenExpiresAt - 60000) {
+      return appAccessToken;
+    }
+    try {
+      const basicAuth = btoa(`${DEFAULT_CLIENT_ID}:${CLIENT_SECRET}`);
+      const res = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${basicAuth}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'grant_type=client_credentials'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.access_token) {
+          appAccessToken = data.access_token;
+          appTokenExpiresAt = Date.now() + (data.expires_in || 3600) * 1000;
+          return appAccessToken;
+        }
+      }
+    } catch (e) {
+      console.warn('[Spotify App Token] Client Credentials token error:', e);
+    }
+    return null;
   }
 
   let userProfile = null;
@@ -383,11 +421,11 @@ const MobileApp = (() => {
     return null;
   }
 
-    return null;
-  }
-
-  async function spotifyApi(endpoint, options = {}) {
-    const token = await getValidAccessToken();
+  async function spotifyApi(endpoint, options = {}, allowAppAuth = true) {
+    let token = await getValidAccessToken();
+    if (!token && allowAppAuth) {
+      token = await getSpotifyAppToken();
+    }
     if (!token) {
       throw new Error('Not authenticated with Spotify');
     }
@@ -405,7 +443,10 @@ const MobileApp = (() => {
 
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
-      throw new Error(errBody.error?.message || `HTTP ${res.status}`);
+      const errMsg = errBody.error?.message || `HTTP ${res.status}`;
+      const err = new Error(errMsg);
+      err.status = res.status;
+      throw err;
     }
 
     return await res.json();
@@ -522,17 +563,6 @@ const MobileApp = (() => {
   }
 
   function fetchDeezerChart() {
-    const genreMap = {
-      all: 0,
-      indie: 85,
-      rock: 152,
-      pop: 132,
-      hiphop: 116,
-      dance: 113,
-      chill: 85
-    };
-    const chartId = genreMap[genre] !== undefined ? genreMap[genre] : 0;
-
     return new Promise((resolve) => {
       const cbName = 'dz_chart_' + Math.random().toString(36).substring(2, 9);
       const script = document.createElement('script');
@@ -561,7 +591,6 @@ const MobileApp = (() => {
             preview_url: t.preview,
             duration_ms: (t.duration || 30) * 1000,
             spotify_url: null,
-            genre: genre,
             plays: Math.floor(Math.random() * 45) + 20,
             bpm: Math.floor(Math.random() * 35) + 110
           }));
@@ -576,7 +605,7 @@ const MobileApp = (() => {
         resolve([]);
       };
 
-      script.src = `https://api.deezer.com/chart/${chartId}/tracks?limit=50&output=jsonp&callback=${cbName}`;
+      script.src = `https://api.deezer.com/chart/0/tracks?limit=50&output=jsonp&callback=${cbName}`;
       document.head.appendChild(script);
     });
   }
@@ -875,14 +904,16 @@ const MobileApp = (() => {
     const token = await getValidAccessToken();
     if (!token) return null;
 
-    if (!userProfile) await loadUserProfile().catch(() => {});
+    if (!userProfile) {
+      await loadUserProfile().catch(() => {});
+    }
 
-    // 1. Verify if current activePlaylist is valid and writable
+    // 1. Verify if current activePlaylist is owned by current user and writable
     if (activePlaylist.id) {
       try {
-        const pl = await spotifyApi(`/playlists/${activePlaylist.id}?fields=id,name,owner,collaborative,external_urls`);
+        const pl = await spotifyApi(`/playlists/${activePlaylist.id}?fields=id,name,owner,collaborative,external_urls`, {}, false);
         if (pl && pl.id) {
-          const isOwner = !userProfile || (pl.owner && pl.owner.id === userProfile.id);
+          const isOwner = userProfile && pl.owner && pl.owner.id === userProfile.id;
           if (isOwner || pl.collaborative) {
             activePlaylist.id = pl.id;
             activePlaylist.name = pl.name;
@@ -905,7 +936,7 @@ const MobileApp = (() => {
 
     const ownedSwipe = allUserPlaylists.find(p => 
       p.name && p.name.toLowerCase().includes('spotify swipe') &&
-      (!userProfile || p.owner?.id === userProfile.id)
+      userProfile && p.owner?.id === userProfile.id
     );
     if (ownedSwipe) {
       await selectPlaylist(ownedSwipe.id, false);
@@ -913,13 +944,13 @@ const MobileApp = (() => {
     }
 
     // 3. Fallback to any user-owned playlist
-    const anyOwned = allUserPlaylists.find(p => !userProfile || p.owner?.id === userProfile.id);
+    const anyOwned = allUserPlaylists.find(p => userProfile && p.owner?.id === userProfile.id);
     if (anyOwned) {
       await selectPlaylist(anyOwned.id, false);
       return anyOwned.id;
     }
 
-    // 4. Create new dedicated playlist
+    // 4. Create new dedicated user playlist
     try {
       const created = await createSpotifyPlaylist('Spotify Swipe Jams');
       return created.id;
@@ -1022,8 +1053,10 @@ const MobileApp = (() => {
         hasWritePermissionError = true;
         renderDesktopQueue();
         triggerError('ERR_SPOTIFY_403', 'Write access required. Click below to grant permissions.', 'Grant Access', () => loginWithSpotify());
+      } else if (e.message && e.message.includes('404')) {
+        triggerError('ERR_SPOTIFY_404', 'Playlist not found on Spotify. Switched to your own playlist.');
       } else {
-        triggerError('ERR_SPOTIFY_403', `Sync notice: ${e.message}`);
+        triggerError('ERR_PLAYLIST_003', `Sync notice: ${e.message}`);
       }
     }
   }
@@ -1298,51 +1331,35 @@ const MobileApp = (() => {
     return pool;
   }
 
-  async function fetchSpotifyGenreDeck(genre = currentGenre) {
-    const pool = [];
-    const queries = {
-      all: 'year:2024-2025',
-      indie: 'genre:indie OR genre:"indie rock" OR genre:alternative',
-      pop: 'genre:pop',
-      hiphop: 'genre:"hip hop" OR genre:rap',
-      dance: 'genre:dance OR genre:edm OR genre:house',
-      chill: 'genre:chill OR genre:lo-fi OR genre:acoustic'
-    };
-
-    let q = queries[genre] || queries.all;
-    if (likedArtists.size > 0) {
-      const topArtists = Array.from(likedArtists).slice(-3);
-      const artistQuery = topArtists.map(a => `artist:"${a}"`).join(' OR ');
-      q = `(${q}) OR (${artistQuery})`;
-    }
-
+  async function fetchSpotifySearchTracks(query) {
     try {
-      const res = await spotifyApi(`/search?q=${encodeURIComponent(q)}&type=track&limit=50`);
+      const res = await spotifyApi(`/search?q=${encodeURIComponent(query)}&type=track&limit=25`, {}, true);
+      const list = [];
       if (res && res.tracks?.items) {
         res.tracks.items.forEach(trk => {
           if (!trk || !trk.id || isDuplicateTrack(trk)) return;
-          pool.push({
+          list.push({
             id: trk.id,
             uri: trk.uri,
             name: trk.name,
             artist: trk.artists?.map(a => a.name).join(', ') || 'Unknown Artist',
             album: trk.album?.name || '',
-            year: trk.album?.release_date ? trk.album.release_date.split('-')[0] : '',
+            year: trk.album?.release_date ? trk.album.release_date.split('-')[0] : '2025',
             total_tracks: trk.album?.total_tracks || 1,
             cover_url: trk.album?.images?.[0]?.url || '',
             preview_url: trk.preview_url,
             duration_ms: trk.duration_ms,
             spotify_url: trk.external_urls?.spotify,
-            genre: genre,
-            plays: Math.floor(Math.random() * 45) + 12,
+            plays: Math.floor(Math.random() * 45) + 15,
             bpm: Math.floor(Math.random() * 40) + 105
           });
         });
       }
+      return list;
     } catch (e) {
-      console.warn('[Spotify] Genre search error:', e);
+      console.warn('[Spotify Search] error:', e);
+      return [];
     }
-    return pool;
   }
 
   let isReplenishing = false;
@@ -1353,52 +1370,32 @@ const MobileApp = (() => {
 
     isReplenishing = true;
     try {
-      const token = await getValidAccessToken();
       let newTracks = [];
 
-      // 1. If user has recently liked artists (e.g. Deftones), prioritize fetching more of their style!
+      // 1. If user has recently liked artists (e.g. Deftones), fetch more of their songs from Spotify!
       if (recentLikedArtists.length > 0) {
-        const topArtists = recentLikedArtists.slice(0, 3);
-        for (const artist of topArtists) {
-          if (token) {
-            try {
-              const res = await spotifyApi(`/search?q=${encodeURIComponent('artist:"' + artist + '"')}&type=track&limit=15`);
-              if (res && res.tracks?.items) {
-                res.tracks.items.forEach(trk => {
-                  if (!trk || !trk.id || isDuplicateTrack(trk)) return;
-                  newTracks.push({
-                    id: trk.id,
-                    uri: trk.uri,
-                    name: trk.name,
-                    artist: trk.artists?.map(a => a.name).join(', ') || artist,
-                    album: trk.album?.name || '',
-                    year: trk.album?.release_date ? trk.album.release_date.split('-')[0] : '',
-                    total_tracks: trk.album?.total_tracks || 1,
-                    cover_url: trk.album?.images?.[0]?.url || '',
-                    preview_url: trk.preview_url,
-                    duration_ms: trk.duration_ms,
-                    spotify_url: trk.external_urls?.spotify,
-                    plays: Math.floor(Math.random() * 45) + 15,
-                    bpm: Math.floor(Math.random() * 40) + 105
-                  });
-                });
-              }
-            } catch (e) {}
-          }
-          if (newTracks.length < 10) {
-            try {
-              const dz = await fetchDeezerSearchTracks(`artist:"${artist}"`);
-              const filteredDz = (dz || []).filter(t => !isDuplicateTrack(t));
-              newTracks = newTracks.concat(filteredDz);
-            } catch (e) {}
-          }
+        for (const artist of recentLikedArtists.slice(0, 3)) {
+          const sp = await fetchSpotifySearchTracks(`artist:"${artist}"`);
+          newTracks.push(...sp);
         }
       }
 
-      // 2. Also pull trending tracks to keep stream varied
-      if (newTracks.length < 10) {
+      // 2. Fetch fresh tracks from Spotify
+      if (newTracks.length < 15) {
+        const feat = await fetchSpotifyFeaturedDeck();
+        newTracks.push(...feat);
+      }
+
+      // 3. Complement with general Spotify hits search
+      if (newTracks.length < 15) {
+        const hits = await fetchSpotifySearchTracks('year:2024-2025');
+        newTracks.push(...hits);
+      }
+
+      // 4. Fallback if offline
+      if (newTracks.length < 5) {
         const chartTracks = await fetchDeezerChart();
-        newTracks = newTracks.concat(chartTracks || []);
+        newTracks.push(...(chartTracks || []));
       }
 
       const freshTracks = (newTracks || []).filter(t => !isDuplicateTrack(t));
@@ -1423,61 +1420,40 @@ const MobileApp = (() => {
     showLoading(true);
 
     try {
-      const token = await getValidAccessToken();
       let candidateList = [];
 
-      if (currentDiscoverySource === 'spotify-featured' && token) {
-        candidateList = await fetchSpotifyFeaturedDeck();
-      } else if (currentDiscoverySource === 'spotify-personal' && token) {
-        candidateList = await fetchSpotifyPersonalDeck();
-      }
-
-      // If user has saved taste artists (e.g. Deftones), blend them directly into the starting deck!
+      // 1. If user has saved taste artists (e.g. Deftones), blend them directly into starting deck!
       if (recentLikedArtists.length > 0) {
         for (const artist of recentLikedArtists.slice(0, 3)) {
-          if (token) {
-            try {
-              const res = await spotifyApi(`/search?q=${encodeURIComponent('artist:"' + artist + '"')}&type=track&limit=10`);
-              if (res && res.tracks?.items) {
-                res.tracks.items.forEach(trk => {
-                  if (!trk || !trk.id || isDuplicateTrack(trk)) return;
-                  candidateList.push({
-                    id: trk.id,
-                    uri: trk.uri,
-                    name: trk.name,
-                    artist: trk.artists?.map(a => a.name).join(', ') || artist,
-                    album: trk.album?.name || '',
-                    year: trk.album?.release_date ? trk.album.release_date.split('-')[0] : '',
-                    total_tracks: trk.album?.total_tracks || 1,
-                    cover_url: trk.album?.images?.[0]?.url || '',
-                    preview_url: trk.preview_url,
-                    duration_ms: trk.duration_ms,
-                    spotify_url: trk.external_urls?.spotify,
-                    plays: Math.floor(Math.random() * 45) + 12,
-                    bpm: Math.floor(Math.random() * 40) + 105
-                  });
-                });
-              }
-            } catch (e) {}
-          }
+          const spList = await fetchSpotifySearchTracks(`artist:"${artist}"`);
+          candidateList.push(...spList);
         }
       }
 
-      // If source is 'global' or Spotify endpoints gave empty / not authenticated:
-      if (!candidateList || candidateList.length === 0) {
+      // 2. Load Spotify featured tracks directly via Spotify API
+      if (candidateList.length < 20) {
+        const featList = await fetchSpotifyFeaturedDeck();
+        candidateList.push(...featList);
+      }
+
+      // 3. Search Spotify for top trending hits
+      if (candidateList.length < 20) {
+        const hitList = await fetchSpotifySearchTracks('year:2024-2025');
+        candidateList.push(...hitList);
+      }
+
+      // 4. Fallback if offline
+      if (candidateList.length === 0) {
         candidateList = await fetchDeezerChart();
       }
 
-      // If still empty (e.g. offline), fallback to demo tracks
-      if (!candidateList || candidateList.length === 0) {
+      if (candidateList.length === 0) {
         await loadDemoDeck();
         return;
       }
 
-      // 100% Strict Deduplication against active playlist & session-seen tracks
+      // 100% Strict Deduplication
       candidateList = candidateList.filter(t => !isDuplicateTrack(t));
-
-      // Mark all candidates as seen in this session
       candidateList.forEach(t => markTrackSeen(t));
 
       // Shuffle
@@ -2454,14 +2430,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=2.1.0').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=2.1.1').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v2.1.0 installed! Auto-refreshing...');
-                showToast('App updated to v2.1.0! Refreshing...', '🚀');
+                console.log('[PWA] New version v2.1.1 installed! Auto-refreshing...');
+                showToast('App updated to v2.1.1! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
