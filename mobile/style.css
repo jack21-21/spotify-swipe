@@ -31,8 +31,10 @@
 html, body {
   width: 100%;
   height: 100%;
-  overflow: hidden;
-  position: fixed;
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background-color: var(--bg-dark);
   color: var(--text-main);
   font-family: var(--font-family);
@@ -367,7 +369,7 @@ html, body {
   display: flex;
   flex-direction: column;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 45px rgba(var(--accent), 0.12);
-  touch-action: none;
+  touch-action: pan-y;
   will-change: transform, opacity;
   overflow: hidden;
 }
@@ -1200,6 +1202,9 @@ html, body {
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   padding: 10px 16px max(16px, var(--safe-bottom)) 16px;
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.9);
+  touch-action: pan-y;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .playlist-selector-sheet.open {
@@ -1480,6 +1485,9 @@ html, body {
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   padding: 10px 16px max(16px, var(--safe-bottom)) 16px;
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.9);
+  touch-action: pan-y;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .playlist-drawer.open {

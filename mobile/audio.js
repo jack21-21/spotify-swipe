@@ -110,12 +110,58 @@ const AudioManager = (() => {
         p.then(() => {
           isPlaying = true;
           notifyStateChange();
+          updateMediaSession(track);
         }).catch(err => {
           console.warn('[Audio] Autoplay blocked or interrupted:', err.message);
           isPlaying = false;
           notifyStateChange();
         });
       }
+    } else {
+      updateMediaSession(track);
+    }
+  }
+
+  /**
+   * Sets up Android / Chrome / Mobile lock screen media notification with high-res artwork.
+   */
+  function updateMediaSession(track) {
+    if (!('mediaSession' in navigator) || !track) return;
+    try {
+      const artwork = [];
+      if (track.cover_url) {
+        artwork.push(
+          { src: track.cover_url, sizes: '96x96', type: 'image/jpeg' },
+          { src: track.cover_url, sizes: '128x128', type: 'image/jpeg' },
+          { src: track.cover_url, sizes: '192x192', type: 'image/jpeg' },
+          { src: track.cover_url, sizes: '256x256', type: 'image/jpeg' },
+          { src: track.cover_url, sizes: '384x384', type: 'image/jpeg' },
+          { src: track.cover_url, sizes: '512x512', type: 'image/jpeg' }
+        );
+      } else {
+        artwork.push(
+          { src: './icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: './icon-512.png', sizes: '512x512', type: 'image/png' }
+        );
+      }
+
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.name || 'Spotify Track',
+        artist: track.artist || 'Unknown Artist',
+        album: track.album || 'Spotify Swipe',
+        artwork: artwork
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => { resume(); });
+      navigator.mediaSession.setActionHandler('pause', () => { pause(); });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        if (typeof window.triggerSwipeRight === 'function') window.triggerSwipeRight();
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        if (typeof window.triggerSwipeUndo === 'function') window.triggerSwipeUndo();
+      });
+    } catch (e) {
+      console.warn('[MediaSession] Metadata update warning:', e);
     }
   }
 
@@ -181,6 +227,7 @@ const AudioManager = (() => {
     onTimeUpdate: (cb) => onTimeUpdateCallbacks.push(cb),
     onStateChange: (cb) => onStateChangeCallbacks.push(cb),
     onError: (cb) => onErrorCallbacks.push(cb),
+    updateMediaSession,
     unlockMobileAudio
   };
 })();
