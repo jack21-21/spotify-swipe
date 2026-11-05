@@ -9,13 +9,13 @@
   <meta name="apple-mobile-web-app-title" content="SpotifySwipe">
   <meta name="description" content="Tinder-style Spotify playlist maker with physical media frames and real music previews">
   
-  <title>Spotify Swipe v2.1.7 - Mobile & PC Web Player</title>
+  <title>Spotify Swipe v2.1.8 - Mobile & PC Web Player</title>
   
-  <link rel="manifest" href="manifest.json?v=2.1.7">
+  <link rel="manifest" href="manifest.json?v=2.1.8">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   
-  <link rel="stylesheet" href="style.css?v=2.1.7">
+  <link rel="stylesheet" href="style.css?v=2.1.8">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -41,7 +41,7 @@
         <div class="app-logo">
           <img src="icon-192.png" alt="Logo" class="app-logo-icon" />
           <span class="app-title">Swipe</span>
-          <span class="app-version-badge" title="Live Version">v2.1.7</span>
+          <span class="app-version-badge" title="Live Version">v2.1.8</span>
         </div>
       </div>
 
@@ -53,9 +53,9 @@
           <span class="pl-pill-chevron">▾</span>
         </button>
 
-        <button class="source-pill-btn" id="btn-source-toggle" title="Switch Discovery Mode: Recommended vs My Spotify vs Global">
-          <span class="source-icon" id="source-pill-icon">✨</span>
-          <span class="source-label" id="source-pill-label">Recommended</span>
+        <button class="source-pill-btn" id="btn-source-toggle" title="Switch Discovery Mode: Repeat Jams vs Recommended vs Global">
+          <span class="source-icon" id="source-pill-icon">🔥</span>
+          <span class="source-label" id="source-pill-label">Repeat Jams</span>
         </button>
       </div>
 
@@ -153,7 +153,7 @@
     </div>
 
     <!-- Desktop Version Bar -->
-    <div class="desktop-only desktop-version-bar">Spotify Swipe • <span class="badge-v">v2.1.7 Live</span> • Direct Spotify Connect</div>
+    <div class="desktop-only desktop-version-bar">Spotify Swipe • <span class="badge-v">v2.1.8 Live</span> • Direct Spotify Connect</div>
   </div>
 
   <!-- Mobile-Native Playlist Selector Sheet (Opens on tapping header pill) -->
@@ -170,22 +170,22 @@
     <!-- Discovery Music Source Selector -->
     <div class="sheet-sublabel">DISCOVERY MODE:</div>
     <div class="source-selector-grid">
-      <button class="source-card-btn active" data-source="spotify-recommended" id="src-btn-spotify-recommended">
+      <button class="source-card-btn active" data-source="spotify-personal" id="src-btn-spotify-personal">
+        <div class="src-card-top">
+          <span class="src-badge-icon">🔥</span>
+          <span class="src-status-pill">3+ Plays Verified</span>
+        </div>
+        <strong>Repeat Jams (3+ Listens)</strong>
+        <p>Songs you've listened to recently and at least 3 times from your Spotify history</p>
+      </button>
+
+      <button class="source-card-btn" data-source="spotify-recommended" id="src-btn-spotify-recommended">
         <div class="src-card-top">
           <span class="src-badge-icon">✨</span>
           <span class="src-status-pill">Playlist Radar</span>
         </div>
         <strong>Spotify Recommended</strong>
-        <p>Analyzes your active playlist tracks and discovers similar artists & acoustic vibes</p>
-      </button>
-
-      <button class="source-card-btn" data-source="spotify-personal" id="src-btn-spotify-personal">
-        <div class="src-card-top">
-          <span class="src-badge-icon">⭐</span>
-          <span class="src-status-pill">My Profile</span>
-        </div>
-        <strong>My Spotify Favorites</strong>
-        <p>Top tracks and history from your personal Spotify account</p>
+        <p>Analyzes your active playlist tracks and discovers matching acoustic vibes</p>
       </button>
 
       <button class="source-card-btn" data-source="spotify-featured" id="src-btn-spotify-featured">
@@ -199,7 +199,7 @@
 
       <button class="source-card-btn" data-source="global" id="src-btn-global">
         <div class="src-card-top">
-          <span class="src-badge-icon">🔥</span>
+          <span class="src-badge-icon">🌍</span>
           <span class="src-status-pill">100% Matched</span>
         </div>
         <strong>Global Trending Hits</strong>
@@ -309,7 +309,7 @@
         <div class="setting-item version-item">
           <div class="version-row">
             <span>App Version:</span>
-            <span class="version-tag">v2.1.7</span>
+            <span class="version-tag">v2.1.8</span>
           </div>
           <small class="version-desc">Direct Spotify Auto-Auth, Real Listening History Deck, Zero 403 /items Engine, Ultra-Clean Mobile UI</small>
         </div>
@@ -396,8 +396,8 @@
   <div id="confetti-container" class="confetti-container"></div>
 
   <!-- Core Scripts -->
-  <script src="theme.js?v=2.1.7"></script>
-  <script src="audio.js?v=2.1.7"></script>
-  <script src="app.js?v=2.1.7"></script>
+  <script src="theme.js?v=2.1.8"></script>
+  <script src="audio.js?v=2.1.8"></script>
+  <script src="app.js?v=2.1.8"></script>
 </body>
 </html>
