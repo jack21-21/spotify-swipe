@@ -595,24 +595,35 @@ const MobileApp = (() => {
     }
 
     const token = await getValidAccessToken();
-    if (token) {
-      try {
-        if (!activePlaylist.id) {
-          await createSpotifyPlaylist('Spotify Swipe Jams');
-        }
+    if (!token) {
+      existingTrackIds.add(track.id);
+      activePlaylist.tracks.push(track);
+      saveActivePlaylistMeta();
+      updatePlaylistStatsUi();
+      renderDrawerTracks();
+      showToast(`Saved in queue! Connect Spotify to sync to your account.`, '🔑');
+      vibrate(20);
+      return false;
+    }
 
-        if (activePlaylist.id) {
-          await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
-            method: 'POST',
-            body: JSON.stringify({
-              uris: [track.uri || `spotify:track:${track.id}`]
-            })
-          });
-        }
-      } catch (e) {
-        console.warn('[Spotify] Playlist sync warning:', e);
-        showToast(`Spotify error: ${e.message}`, '⚠️');
+    try {
+      if (!activePlaylist.id) {
+        showToast('Creating "Spotify Swipe Jams" on your Spotify...', '⏳');
+        await createSpotifyPlaylist('Spotify Swipe Jams');
       }
+
+      if (activePlaylist.id) {
+        await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
+          method: 'POST',
+          body: JSON.stringify({
+            uris: [track.uri || `spotify:track:${track.id}`]
+          })
+        });
+        showToast(`Added to Spotify "${activePlaylist.name}"!`, '💚');
+      }
+    } catch (e) {
+      console.warn('[Spotify] Playlist sync warning:', e);
+      showToast(`Spotify: ${e.message}`, '⚠️');
     }
 
     existingTrackIds.add(track.id);
@@ -620,7 +631,6 @@ const MobileApp = (() => {
     saveActivePlaylistMeta();
     updatePlaylistStatsUi();
     renderDrawerTracks();
-    showToast(`Added "${track.name}" to playlist!`, '💚');
     vibrate(30);
     return true;
   }
@@ -1321,15 +1331,17 @@ const MobileApp = (() => {
   /* ---------------------------- Drawer & Modal Sheets ---------------------------- */
 
   async function openPlaylistSelectorSheet() {
-    renderPlaylistCards();
+    const token = await getValidAccessToken();
+    renderPlaylistCards(token);
     const sheet = $('#playlist-selector-sheet');
     const overlay = $('#playlist-selector-overlay');
     if (sheet && overlay) {
       sheet.classList.add('open');
       overlay.classList.add('open');
     }
-    if (accessToken && allUserPlaylists.length === 0) {
+    if (token && allUserPlaylists.length === 0) {
       await loadUserPlaylists();
+      renderPlaylistCards(token);
     }
   }
 
@@ -1342,11 +1354,11 @@ const MobileApp = (() => {
     }
   }
 
-  function renderPlaylistCards() {
+  function renderPlaylistCards(token) {
     const container = $('#playlist-cards-list');
     if (!container) return;
 
-    if (!accessToken) {
+    if (!token) {
       container.innerHTML = `
         <div class="sheet-connect-box">
           <p class="sheet-connect-desc">Connect with Spotify to view, choose, or sync your playlists!</p>
@@ -1356,7 +1368,7 @@ const MobileApp = (() => {
           </button>
         </div>
       `;
-      $('#btn-sheet-spotify-login')?.addEventListener('click', () => initiateSpotifyLogin());
+      $('#btn-sheet-spotify-login')?.addEventListener('click', () => loginWithSpotify());
       return;
     }
 
@@ -1607,14 +1619,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=1.2.1').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=1.2.2').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v1.2.1 installed! Auto-refreshing...');
-                showToast('App updated to v1.2.1! Refreshing...', '🚀');
+                console.log('[PWA] New version v1.2.2 installed! Auto-refreshing...');
+                showToast('App updated to v1.2.2! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
@@ -1730,6 +1742,44 @@ const MobileApp = (() => {
         showToast('Client ID saved!', '💾');
       }
     });
+
+    // Desktop PC Easy-Access Volume Slider & Mute Toggle
+    const deskVolSlider = $('#desktop-vol-slider');
+    const deskVolLabel = $('#desktop-vol-label');
+    const deskVolMuteBtn = $('#desktop-vol-mute-btn');
+    const savedVol = parseFloat(localStorage.getItem('swipemobile_volume') || '0.85');
+
+    if (deskVolSlider) {
+      deskVolSlider.value = Math.round(savedVol * 100);
+      if (deskVolLabel) deskVolLabel.textContent = `${Math.round(savedVol * 100)}%`;
+
+      deskVolSlider.addEventListener('input', (e) => {
+        const v = parseFloat(e.target.value) / 100;
+        AudioManager.setVolume(v);
+        localStorage.setItem('swipemobile_volume', String(v));
+        if (deskVolLabel) deskVolLabel.textContent = `${Math.round(v * 100)}%`;
+        if (deskVolMuteBtn) deskVolMuteBtn.textContent = v === 0 ? '🔇' : v < 0.5 ? '🔉' : '🔊';
+
+        const setSlider = $('#settings-vol-slider');
+        const setLabel = $('#settings-vol-label');
+        if (setSlider) setSlider.value = Math.round(v * 100);
+        if (setLabel) setLabel.textContent = `${Math.round(v * 100)}%`;
+      });
+    }
+
+    if (deskVolMuteBtn) {
+      deskVolMuteBtn.addEventListener('click', () => {
+        const isMuted = AudioManager.toggleMute();
+        deskVolMuteBtn.textContent = isMuted ? '🔇' : '🔊';
+        if (isMuted) {
+          if (deskVolLabel) deskVolLabel.textContent = 'Muted';
+        } else {
+          const currentV = AudioManager.getVolume ? AudioManager.getVolume() : 0.85;
+          if (deskVolLabel) deskVolLabel.textContent = `${Math.round(currentV * 100)}%`;
+          if (deskVolSlider) deskVolSlider.value = Math.round(currentV * 100);
+        }
+      });
+    }
 
     // Desktop PC Keyboard Shortcuts (Space: preview, Left: pass, Right: like, Z: undo, 1-5: format)
     window.addEventListener('keydown', (e) => {

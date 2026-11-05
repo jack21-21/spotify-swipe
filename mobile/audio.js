@@ -147,7 +147,14 @@ const AudioManager = (() => {
 
   function setVolume(val) {
     volume = Math.max(0, Math.min(1, val));
+    isMuted = false;
+    audio.volume = volume;
+  }
+
+  function toggleMute() {
+    isMuted = !isMuted;
     audio.volume = isMuted ? 0 : volume;
+    return isMuted;
   }
 
   function seek(progress) {
@@ -165,6 +172,9 @@ const AudioManager = (() => {
     pause,
     resume,
     setVolume,
+    toggleMute,
+    getVolume: () => volume,
+    isMuted: () => isMuted,
     seek,
     isPlaying: () => !audio.paused && isPlaying,
     getCurrentTrack: () => currentTrack,
