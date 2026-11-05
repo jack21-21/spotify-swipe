@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1ed760">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SpotifySwipe">
+  <meta name="description" content="Tinder-style Spotify playlist maker with physical media frames and reactive visualizers">
+  
+  <title>Spotify Swipe Mobile</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body data-album-style="record">
+  <!-- Dynamic Reactive Background Visualizer Canvas -->
+  <canvas id="viz-canvas"></canvas>
+
+  <!-- Chameleon Ambient Glow Overlays -->
+  <div class="ambient-glow ambient-glow-top"></div>
+  <div class="ambient-glow ambient-glow-bottom"></div>
+
+  <!-- Main Mobile App Layout -->
+  <div class="mobile-app-wrapper">
+    <!-- Header Bar -->
+    <header class="mobile-header">
+      <div class="header-left">
+        <div class="app-logo">
+          <img src="icon-192.png" alt="Logo" class="app-logo-icon" />
+          <span class="app-title">Swipe</span>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <button class="playlist-pill-btn" id="active-playlist-pill">
+          <span class="pl-pill-icon">🎧</span>
+          <span class="pl-pill-name" id="active-playlist-pill-name">Swipe Playlist</span>
+          <span class="pl-pill-count" id="header-track-count">0</span>
+        </button>
+      </div>
+
+      <div class="header-right">
+        <!-- Visualizer Dropdown -->
+        <div class="viz-selector-wrapper">
+          <select id="viz-mode-select" class="viz-select" aria-label="Visualizer Mode">
+            <option value="halo">✨ Halo</option>
+            <option value="cybereq">📊 Cyber EQ</option>
+            <option value="wave">🌊 Wave</option>
+            <option value="starfield">🌌 Starfield</option>
+            <option value="plasma">🔮 Plasma</option>
+            <option value="matrix">💻 Matrix</option>
+            <option value="galaxy">🪐 Galaxy</option>
+            <option value="ribbon">🎀 Ribbon</option>
+            <option value="prism">💎 Prism</option>
+            <option value="retrogrid">🕹️ Retro</option>
+          </select>
+        </div>
+
+        <!-- Settings Button -->
+        <button class="icon-btn" id="btn-settings" aria-label="Settings">⚙️</button>
+
+        <!-- User Profile Avatar / Login -->
+        <button class="profile-badge-btn" id="user-profile-badge" style="display: none;">
+          <img id="user-avatar-img" src="icon-192.png" alt="Avatar" class="user-avatar" />
+        </button>
+        <button class="login-badge-btn" id="btn-spotify-login">
+          <svg viewBox="0 0 24 24" class="spotify-svg-mini"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
+          <span>Connect</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Card Deck Area -->
+    <main class="deck-viewport">
+      <!-- Loading indicator -->
+      <div id="deck-loader" class="deck-loader">
+        <div class="spinner"></div>
+        <span>Finding your next favorite track...</span>
+      </div>
+
+      <!-- Card Stack Container -->
+      <div id="card-deck" class="card-deck"></div>
+    </main>
+
+    <!-- Mobile Action Dock -->
+    <footer class="action-dock">
+      <button class="dock-btn btn-undo" id="btn-undo" title="Undo Last Swipe" disabled>
+        <span class="dock-icon">↩️</span>
+      </button>
+
+      <button class="dock-btn btn-pass" id="btn-pass" title="Pass (Swipe Left)">
+        <span class="dock-icon">✖</span>
+      </button>
+
+      <button class="dock-btn btn-preview" id="btn-preview-toggle" title="Play Preview">
+        <span class="dock-icon">▶</span>
+      </button>
+
+      <button class="dock-btn btn-like" id="btn-like" title="Add to Playlist (Swipe Right)">
+        <span class="dock-icon">💚</span>
+      </button>
+
+      <button class="dock-btn btn-playlist" id="btn-view-playlist" title="View Current Playlist">
+        <span class="dock-icon">🎵</span>
+      </button>
+    </footer>
+  </div>
+
+  <!-- Slide-up Playlist Drawer -->
+  <div class="drawer-overlay" id="drawer-overlay"></div>
+  <aside class="playlist-drawer" id="playlist-drawer">
+    <div class="drawer-handle-bar">
+      <div class="drawer-drag-pill"></div>
+    </div>
+
+    <div class="drawer-header">
+      <div class="drawer-header-info">
+        <h2 id="drawer-playlist-name" class="drawer-title">Swipe Playlist</h2>
+        <p id="drawer-playlist-meta" class="drawer-meta">0 songs • 0 mins • Synced with Spotify 🟢</p>
+      </div>
+      <button class="drawer-close-btn" id="btn-close-drawer">✕</button>
+    </div>
+
+    <!-- Quick Action Bar -->
+    <div class="drawer-quick-actions">
+      <button class="drawer-action-btn btn-dupe-clean" id="btn-remove-duplicates">
+        <span>🧹 Remove Duplicates</span>
+      </button>
+      <button class="drawer-action-btn btn-open-spotify" id="btn-open-spotify-app">
+        <svg viewBox="0 0 24 24" class="spotify-svg-mini"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
+        <span>Open in Spotify App</span>
+      </button>
+    </div>
+
+    <!-- Scrollable Track List -->
+    <div class="drawer-track-list" id="drawer-track-list"></div>
+  </aside>
+
+  <!-- Setup & Playlist Select Modal -->
+  <div class="modal-backdrop" id="setup-modal">
+    <div class="modal-card glass-modal">
+      <div class="modal-header">
+        <h3>🎵 Choose Your Playlist</h3>
+        <button class="modal-close-btn" id="btn-close-setup">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-desc">Pick which Spotify playlist you want your swiped songs to land in:</p>
+
+        <div class="setup-section">
+          <label class="input-label">Create a New Playlist:</label>
+          <div class="input-group">
+            <input type="text" id="new-playlist-name-input" class="text-input" placeholder="e.g. Jack Swiped Jams 2026" />
+            <button class="primary-btn" id="btn-create-playlist-modal">+ Create</button>
+          </div>
+        </div>
+
+        <div class="divider-text"><span>OR</span></div>
+
+        <div class="setup-section">
+          <label class="input-label">Select Existing Playlist:</label>
+          <select id="existing-playlist-select" class="select-input">
+            <option value="">-- Choose Existing Spotify Playlist --</option>
+          </select>
+        </div>
+
+        <div class="auth-gate-box">
+          <button class="spotify-connect-btn" id="btn-modal-login">
+            <svg viewBox="0 0 24 24" class="spotify-svg-btn"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
+            <span>Connect with Spotify (No PC Needed)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-backdrop" id="settings-modal">
+    <div class="modal-card glass-modal">
+      <div class="modal-header">
+        <h3>⚙️ App Settings</h3>
+        <button class="modal-close-btn" id="btn-close-settings">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="setting-item">
+          <label>Audio Preview Volume</label>
+          <div class="vol-control-row">
+            <input type="range" id="settings-vol-slider" min="0" max="100" value="85" class="range-slider" />
+            <span id="settings-vol-label" class="vol-num">85%</span>
+          </div>
+        </div>
+
+        <div class="setting-item checkbox-item">
+          <label for="auto-preview-checkbox">Auto-play 30s Audio Previews</label>
+          <input type="checkbox" id="auto-preview-checkbox" checked />
+        </div>
+
+        <div class="setting-item">
+          <label>Spotify Client ID</label>
+          <div class="input-group">
+            <input type="text" id="client-id-input" class="text-input" />
+            <button class="secondary-btn" id="btn-save-client-id">Save</button>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label>Redirect URI to add in Spotify Dashboard:</label>
+          <div class="uri-copy-box">
+            <code id="redirect-uri-display"></code>
+          </div>
+        </div>
+
+        <div class="modal-footer-actions">
+          <button class="danger-btn" id="btn-logout">Log Out of Spotify</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast" class="toast">
+    <span class="toast-icon">🎵</span>
+    <span class="toast-text">Message</span>
+  </div>
+
+  <!-- Confetti Container -->
+  <div id="confetti-container" class="confetti-container"></div>
+
+  <!-- Core Scripts -->
+  <script src="theme.js"></script>
+  <script src="audio.js"></script>
+  <script src="visualizer.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
