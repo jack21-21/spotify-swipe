@@ -1,10 +1,10 @@
 /**
- * Spotify Swipe PWA Service Worker — v2.1.1
+ * Spotify Swipe PWA Service Worker — v2.1.2
  * Network-First strategy ensures the app always loads the latest code
  * from GitHub Pages, falling back to cache if offline.
  */
 
-const CACHE_NAME = 'spotify-swipe-v2.1.1';
+const CACHE_NAME = 'spotify-swipe-v2.1.2';
 const ASSETS = [
   './',
   './index.html',

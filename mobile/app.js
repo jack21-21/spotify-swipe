@@ -12,21 +12,38 @@ const MobileApp = (() => {
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  // Spotify Configuration
+  // Spotify Configuration & Full Permissions
   const DEFAULT_CLIENT_ID = '2e9d00e15cc44cffaaba76a52f88e10a';
   const CLIENT_SECRET = 'e8ba4adf3d6d4f23b998fb1c932d4e63';
+  const REQUIRED_SCOPE_VERSION = 'v2.1.2-full-perms';
+
   const SCOPES = [
-    'user-read-private',
-    'user-read-email',
-    'playlist-read-private',
-    'playlist-read-collaborative',
     'playlist-modify-public',
     'playlist-modify-private',
+    'playlist-read-private',
+    'playlist-read-collaborative',
+    'user-library-modify',
+    'user-library-read',
+    'user-read-private',
+    'user-read-email',
     'user-top-read',
     'user-read-recently-played',
     'user-modify-playback-state',
-    'user-read-playback-state'
+    'user-read-playback-state',
+    'user-read-currently-playing',
+    'streaming'
   ].join(' ');
+
+  // Automatic Scope Upgrade: clear old under-scoped tokens so full write perms are requested
+  try {
+    const savedScopeVer = localStorage.getItem('swipemobile_scope_version');
+    if (savedScopeVer !== REQUIRED_SCOPE_VERSION) {
+      localStorage.removeItem('swipemobile_access_token');
+      localStorage.removeItem('swipemobile_refresh_token');
+      localStorage.removeItem('swipemobile_expires_at');
+      localStorage.setItem('swipemobile_scope_version', REQUIRED_SCOPE_VERSION);
+    }
+  } catch (e) {}
 
   // Comprehensive Error Code Reference System
   const ERROR_CODES = {
@@ -780,11 +797,19 @@ const MobileApp = (() => {
       allUserPlaylists = data.items || [];
       renderPlaylistCards();
 
-      // If no active playlist is selected yet, default to first owned playlist
+      // If no active playlist is selected yet, choose user's owned Spotify Swipe playlist or create one
       if (!activePlaylist.id && allUserPlaylists.length > 0) {
-        const first = allUserPlaylists.find(p => p.owner?.id === userProfile?.id) || allUserPlaylists[0];
-        if (first) {
-          await selectPlaylist(first.id, false);
+        const ownedSwipe = allUserPlaylists.find(p => 
+          p.name && p.name.toLowerCase().includes('spotify swipe') &&
+          userProfile && p.owner?.id === userProfile.id
+        );
+        if (ownedSwipe) {
+          await selectPlaylist(ownedSwipe.id, false);
+        } else {
+          const firstOwned = allUserPlaylists.find(p => userProfile && p.owner?.id === userProfile.id);
+          if (firstOwned) {
+            await selectPlaylist(firstOwned.id, false);
+          }
         }
       }
     } catch (e) {
@@ -816,7 +841,7 @@ const MobileApp = (() => {
   async function loadPlaylistTracks(playlistId) {
     if (!playlistId) return [];
     try {
-      const data = await spotifyApi(`/playlists/${playlistId}/tracks?limit=100`);
+      const data = await spotifyApi(`/playlists/${playlistId}/tracks?limit=100`, {}, false);
       const remoteTracks = [];
 
       (data.items || []).forEach(item => {
@@ -861,41 +886,88 @@ const MobileApp = (() => {
   }
 
   async function createSpotifyPlaylist(name) {
-    if (!userProfile) await loadUserProfile();
+    if (!userProfile) userProfile = await loadUserProfile();
     if (!userProfile) throw new Error('Please login with Spotify to create playlists.');
 
+    const plName = name || 'Spotify Swipe Jams';
     const preservedTracks = Array.isArray(activePlaylist.tracks) ? [...activePlaylist.tracks] : [];
+    let newPl = null;
 
-    let newPl;
+    // Try 1: POST /me/playlists with public: true
     try {
-      newPl = await spotifyApi(`/users/${userProfile.id}/playlists`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name: name || 'Spotify Swipe Jams',
-          description: 'Curated with Spotify Swipe 💚',
-          public: false
-        })
-      });
-    } catch (err) {
       newPl = await spotifyApi('/me/playlists', {
         method: 'POST',
         body: JSON.stringify({
-          name: name || 'Spotify Swipe Jams',
+          name: plName,
           description: 'Curated with Spotify Swipe 💚',
-          public: false
+          public: true
         })
-      });
+      }, false);
+    } catch (e1) {
+      console.warn('[Create Playlist] /me/playlists public failed:', e1.message);
+    }
+
+    // Try 2: POST /me/playlists with public: false
+    if (!newPl) {
+      try {
+        newPl = await spotifyApi('/me/playlists', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: plName,
+            description: 'Curated with Spotify Swipe 💚',
+            public: false
+          })
+        }, false);
+      } catch (e2) {
+        console.warn('[Create Playlist] /me/playlists private failed:', e2.message);
+      }
+    }
+
+    // Try 3: POST /users/{userProfile.id}/playlists with public: true
+    if (!newPl && userProfile.id) {
+      try {
+        newPl = await spotifyApi(`/users/${userProfile.id}/playlists`, {
+          method: 'POST',
+          body: JSON.stringify({
+            name: plName,
+            description: 'Curated with Spotify Swipe 💚',
+            public: true
+          })
+        }, false);
+      } catch (e3) {
+        console.warn('[Create Playlist] /users/{id} public failed:', e3.message);
+      }
+    }
+
+    // Try 4: POST /users/{userProfile.id}/playlists with public: false
+    if (!newPl && userProfile.id) {
+      try {
+        newPl = await spotifyApi(`/users/${userProfile.id}/playlists`, {
+          method: 'POST',
+          body: JSON.stringify({
+            name: plName,
+            description: 'Curated with Spotify Swipe 💚',
+            public: false
+          })
+        }, false);
+      } catch (e4) {
+        throw new Error(e4.message || 'Could not create playlist on Spotify');
+      }
+    }
+
+    if (!newPl || !newPl.id) {
+      throw new Error('Spotify playlist creation returned no ID');
     }
 
     activePlaylist.id = newPl.id;
     activePlaylist.name = newPl.name;
-    activePlaylist.owner = newPl.owner;
+    activePlaylist.owner = newPl.owner || userProfile;
     activePlaylist.url = newPl.external_urls?.spotify;
     activePlaylist.tracks = preservedTracks;
     saveActivePlaylistMeta();
     updatePlaylistStatsUi();
 
-    await loadUserPlaylists();
+    await loadUserPlaylists().catch(() => {});
     renderDesktopQueue();
     return newPl;
   }
@@ -905,7 +977,11 @@ const MobileApp = (() => {
     if (!token) return null;
 
     if (!userProfile) {
-      await loadUserProfile().catch(() => {});
+      userProfile = await loadUserProfile().catch(() => null);
+    }
+    if (!userProfile) {
+      triggerError('ERR_AUTH_001', 'Please connect with Spotify first.', 'Connect', () => loginWithSpotify());
+      return null;
     }
 
     // 1. Verify if current activePlaylist is owned by current user and writable
@@ -913,7 +989,7 @@ const MobileApp = (() => {
       try {
         const pl = await spotifyApi(`/playlists/${activePlaylist.id}?fields=id,name,owner,collaborative,external_urls`, {}, false);
         if (pl && pl.id) {
-          const isOwner = userProfile && pl.owner && pl.owner.id === userProfile.id;
+          const isOwner = pl.owner && pl.owner.id === userProfile.id;
           if (isOwner || pl.collaborative) {
             activePlaylist.id = pl.id;
             activePlaylist.name = pl.name;
@@ -936,22 +1012,16 @@ const MobileApp = (() => {
 
     const ownedSwipe = allUserPlaylists.find(p => 
       p.name && p.name.toLowerCase().includes('spotify swipe') &&
-      userProfile && p.owner?.id === userProfile.id
+      p.owner && p.owner.id === userProfile.id
     );
     if (ownedSwipe) {
       await selectPlaylist(ownedSwipe.id, false);
       return ownedSwipe.id;
     }
 
-    // 3. Fallback to any user-owned playlist
-    const anyOwned = allUserPlaylists.find(p => userProfile && p.owner?.id === userProfile.id);
-    if (anyOwned) {
-      await selectPlaylist(anyOwned.id, false);
-      return anyOwned.id;
-    }
-
-    // 4. Create new dedicated user playlist
+    // 3. Create new dedicated user playlist "Spotify Swipe Jams"
     try {
+      showToast('Creating "Spotify Swipe Jams" on your Spotify...', '⏳');
       const created = await createSpotifyPlaylist('Spotify Swipe Jams');
       return created.id;
     } catch (createErr) {
@@ -967,7 +1037,7 @@ const MobileApp = (() => {
   async function syncAllToSpotify() {
     const token = await getValidAccessToken();
     if (!token) {
-      triggerError('ERR_AUTH_001', 'Please connect with Spotify first.');
+      triggerError('ERR_AUTH_001', 'Please connect with Spotify first.', 'Connect', () => loginWithSpotify());
       openPlaylistSelectorSheet();
       return;
     }
@@ -981,18 +1051,19 @@ const MobileApp = (() => {
     try {
       const targetPlaylistId = await ensureEditablePlaylist();
       if (!targetPlaylistId) {
-        showToast('Saved songs in local queue! Connect Spotify to create playlist.', '💚');
+        triggerError('ERR_PLAYLIST_002', 'Could not access or create target playlist on Spotify.');
         return;
       }
 
-      // Ensure any missing Spotify URIs from global charts are resolved
+      // 1. Ensure any missing Spotify URIs from global charts are resolved
       for (const t of activePlaylist.tracks) {
-        if (!t.uri && (!t.id || t.id.startsWith('dz-') || t.id.startsWith('demo-'))) {
+        if (!t.uri || !t.uri.startsWith('spotify:track:')) {
           try {
             const q = cleanTrackTitleForSearch(t.name, t.artist);
-            const searchRes = await spotifyApi(`/search?q=${encodeURIComponent(q)}&type=track&limit=1`);
+            const searchRes = await spotifyApi(`/search?q=${encodeURIComponent(q)}&type=track&limit=1`, {}, true);
             if (searchRes.tracks?.items?.[0]) {
               t.uri = searchRes.tracks.items[0].uri;
+              t.id = searchRes.tracks.items[0].id;
             }
           } catch (e) {}
         }
@@ -1007,47 +1078,52 @@ const MobileApp = (() => {
         return;
       }
 
-      // Add in chunks of 50 to avoid request payload limits
+      // 2. Fetch existing playlist tracks to avoid duplicate additions
+      let remoteTrackUris = new Set();
       try {
-        for (let i = 0; i < uris.length; i += 50) {
-          const chunk = uris.slice(i, i + 50);
+        const curItems = await spotifyApi(`/playlists/${targetPlaylistId}/tracks?limit=100`, {}, false);
+        if (curItems && curItems.items) {
+          curItems.items.forEach(it => {
+            if (it && it.track && it.track.uri) remoteTrackUris.add(it.track.uri);
+          });
+        }
+      } catch (e) {}
+
+      const newUris = uris.filter(u => !remoteTrackUris.has(u));
+
+      // 3. Add to target playlist in chunks of 50
+      if (newUris.length > 0) {
+        for (let i = 0; i < newUris.length; i += 50) {
+          const chunk = newUris.slice(i, i + 50);
           await spotifyApi(`/playlists/${targetPlaylistId}/tracks`, {
             method: 'POST',
             body: JSON.stringify({ uris: chunk })
-          });
-        }
-        hasWritePermissionError = false;
-        renderDesktopQueue();
-        showToast(`Synced ${uris.length} tracks to Spotify "${activePlaylist.name}"!`, '🎉');
-        vibrate(50);
-      } catch (addErr) {
-        if (isForbiddenError(addErr) || (addErr.message && addErr.message.includes('404'))) {
-          try {
-            const fallbackPl = await createSpotifyPlaylist('Spotify Swipe Jams');
-            for (let i = 0; i < uris.length; i += 50) {
-              const chunk = uris.slice(i, i + 50);
-              await spotifyApi(`/playlists/${fallbackPl.id}/tracks`, {
-                method: 'POST',
-                body: JSON.stringify({ uris: chunk })
-              });
-            }
-            hasWritePermissionError = false;
-            showToast(`Synced ${uris.length} tracks to your "Spotify Swipe Jams"!`, '🎉');
-            vibrate(50);
-            renderDesktopQueue();
-          } catch (fbErr) {
-            if (isForbiddenError(fbErr)) {
-              hasWritePermissionError = true;
-              renderDesktopQueue();
-              triggerError('ERR_SPOTIFY_403', 'Write access required. Click below to grant permissions.', 'Grant Access', () => loginWithSpotify());
-            } else {
-              throw fbErr;
-            }
-          }
-        } else {
-          throw addErr;
+          }, false);
         }
       }
+
+      // 4. ALSO save tracks directly to user's Liked Songs library!
+      const trackIds = activePlaylist.tracks
+        .map(t => t.id && !t.id.startsWith('dz-') && !t.id.startsWith('demo-') ? t.id : (t.uri && t.uri.startsWith('spotify:track:') ? t.uri.split(':')[2] : null))
+        .filter(Boolean);
+      if (trackIds.length > 0) {
+        try {
+          for (let i = 0; i < trackIds.length; i += 50) {
+            const chunkIds = trackIds.slice(i, i + 50);
+            await spotifyApi('/me/tracks', {
+              method: 'PUT',
+              body: JSON.stringify({ ids: chunkIds })
+            }, false);
+          }
+        } catch (libErr) {
+          console.warn('[Sync to Library notice]', libErr.message);
+        }
+      }
+
+      hasWritePermissionError = false;
+      renderDesktopQueue();
+      showToast(`Synced ${uris.length} tracks to Spotify "${activePlaylist.name}"!`, '🎉');
+      vibrate(50);
     } catch (e) {
       if (isForbiddenError(e)) {
         hasWritePermissionError = true;
@@ -1118,7 +1194,17 @@ const MobileApp = (() => {
             body: JSON.stringify({
               uris: [trackUri]
             })
-          });
+          }, false);
+
+          // Also add to user's Liked Songs library
+          const trkId = track.id && !track.id.startsWith('dz-') && !track.id.startsWith('demo-') ? track.id : trackUri.split(':')[2];
+          if (trkId) {
+            spotifyApi('/me/tracks', {
+              method: 'PUT',
+              body: JSON.stringify({ ids: [trkId] })
+            }, false).catch(() => {});
+          }
+
           hasWritePermissionError = false;
           showToast(`Added "${track.name}" to Spotify "${activePlaylist.name}"!`, '💚');
           return true;
@@ -2430,14 +2516,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=2.1.1').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=2.1.2').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v2.1.1 installed! Auto-refreshing...');
-                showToast('App updated to v2.1.1! Refreshing...', '🚀');
+                console.log('[PWA] New version v2.1.2 installed! Auto-refreshing...');
+                showToast('App updated to v2.1.2! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
