@@ -108,13 +108,23 @@ const MobileApp = (() => {
 
   const FIN21_API_BASE = 'https://api.fin21.uk';
 
+  function isForbiddenError(e) {
+    if (!e) return false;
+    const msg = (e.message || String(e)).toLowerCase();
+    return msg.includes('forbidden') || msg.includes('403') || msg.includes('permission') || msg.includes('scope');
+  }
+
   async function loginWithSpotify() {
     AudioManager.unlockMobileAudio();
     const returnTo = window.location.origin + window.location.pathname;
     
-    // Primary: fin21 OAuth Bridge (instant redirect, pre-configured secret & scopes)
+    // Clear old tokens to guarantee new write scopes are applied
+    localStorage.removeItem('swipemobile_access_token');
+    localStorage.removeItem('swipemobile_refresh_token');
+
+    // Primary: fin21 OAuth Bridge (force show_dialog=true to guarantee write scopes)
     if (clientId === DEFAULT_CLIENT_ID) {
-      window.location.href = `${FIN21_API_BASE}/spotify/login?scope=${encodeURIComponent(SCOPES)}&return_to=${encodeURIComponent(returnTo)}`;
+      window.location.href = `${FIN21_API_BASE}/spotify/login?show_dialog=true&scope=${encodeURIComponent(SCOPES)}&return_to=${encodeURIComponent(returnTo)}`;
       return;
     }
 
@@ -131,6 +141,7 @@ const MobileApp = (() => {
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('scope', SCOPES);
+    authUrl.searchParams.set('show_dialog', 'true');
     authUrl.searchParams.set('code_challenge_method', 'S256');
     authUrl.searchParams.set('code_challenge', challenge);
 
@@ -745,18 +756,40 @@ const MobileApp = (() => {
       }
 
       // Add in chunks of 50 to avoid request payload limits
-      for (let i = 0; i < uris.length; i += 50) {
-        const chunk = uris.slice(i, i + 50);
-        await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
-          method: 'POST',
-          body: JSON.stringify({ uris: chunk })
-        });
+      try {
+        for (let i = 0; i < uris.length; i += 50) {
+          const chunk = uris.slice(i, i + 50);
+          await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
+            method: 'POST',
+            body: JSON.stringify({ uris: chunk })
+          });
+        }
+        showToast(`Synced ${uris.length} tracks to Spotify "${activePlaylist.name}"!`, '🎉');
+        vibrate(50);
+      } catch (addErr) {
+        if (isForbiddenError(addErr)) {
+          showToast('Selected playlist is read-only. Auto-syncing to your "Spotify Swipe Jams"...', 'ℹ️');
+          const fallbackPl = await createSpotifyPlaylist('Spotify Swipe Jams');
+          for (let i = 0; i < uris.length; i += 50) {
+            const chunk = uris.slice(i, i + 50);
+            await spotifyApi(`/playlists/${fallbackPl.id}/tracks`, {
+              method: 'POST',
+              body: JSON.stringify({ uris: chunk })
+            });
+          }
+          showToast(`Synced ${uris.length} tracks to your "Spotify Swipe Jams"!`, '🎉');
+          vibrate(50);
+          renderDesktopQueue();
+        } else {
+          throw addErr;
+        }
       }
-
-      showToast(`Synced ${uris.length} tracks to Spotify "${activePlaylist.name}"!`, '🎉');
-      vibrate(50);
     } catch (e) {
-      triggerError('ERR_SPOTIFY_403', `Sync failed: ${e.message}`);
+      if (isForbiddenError(e)) {
+        triggerError('ERR_SPOTIFY_403', `Spotify write permission needed. Click "Connect" to approve permissions.`);
+      } else {
+        triggerError('ERR_SPOTIFY_403', `Sync notice: ${e.message}`);
+      }
     }
   }
 
@@ -784,7 +817,7 @@ const MobileApp = (() => {
 
     try {
       // Ensure we target an editable playlist owned by the user
-      if (!activePlaylist.id || (activePlaylist.owner && activePlaylist.owner.id !== userProfile?.id)) {
+      if (!activePlaylist.id || (activePlaylist.owner && userProfile && activePlaylist.owner.id !== userProfile.id && !activePlaylist.collaborative)) {
         await getOrCreateDefaultSwipePlaylist();
       }
 
@@ -810,34 +843,35 @@ const MobileApp = (() => {
           return true;
         }
 
-        await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
-          method: 'POST',
-          body: JSON.stringify({
-            uris: [trackUri]
-          })
-        });
-        showToast(`Added "${track.name}" to Spotify "${activePlaylist.name}"!`, '💚');
-        return true;
+        try {
+          await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
+            method: 'POST',
+            body: JSON.stringify({
+              uris: [trackUri]
+            })
+          });
+          showToast(`Added "${track.name}" to Spotify "${activePlaylist.name}"!`, '💚');
+          return true;
+        } catch (addErr) {
+          if (isForbiddenError(addErr)) {
+            const fallbackPl = await createSpotifyPlaylist('Spotify Swipe Jams');
+            await spotifyApi(`/playlists/${fallbackPl.id}/tracks`, {
+              method: 'POST',
+              body: JSON.stringify({ uris: [trackUri] })
+            });
+            showToast(`Added "${track.name}" to your "Spotify Swipe Jams"!`, '🎉');
+            renderDesktopQueue();
+            return true;
+          }
+          throw addErr;
+        }
       }
     } catch (e) {
       console.warn('[Spotify] Playlist sync warning:', e);
-      if (e.message && e.message.includes('403')) {
-        triggerError('ERR_SPOTIFY_403', `403 Forbidden. Creating dedicated "Spotify Swipe Jams" playlist...`);
-        try {
-          await createSpotifyPlaylist('Spotify Swipe Jams');
-          const trackUri = track.uri || `spotify:track:${track.id}`;
-          await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
-            method: 'POST',
-            body: JSON.stringify({ uris: [trackUri] })
-          });
-          showToast(`Created playlist & added "${track.name}"!`, '🎉');
-          renderDesktopQueue();
-          return true;
-        } catch (retryErr) {
-          triggerError('ERR_SPOTIFY_403', `Could not add to Spotify. Please re-grant playlist permissions.`);
-        }
+      if (isForbiddenError(e)) {
+        triggerError('ERR_SPOTIFY_403', `Playlist write permission needed. Click "Connect" to approve permissions.`);
       } else {
-        triggerError('ERR_SPOTIFY_404', `Spotify sync: ${e.message}`);
+        triggerError('ERR_SPOTIFY_403', `Spotify sync notice: ${e.message}`);
       }
       return false;
     }
@@ -845,24 +879,36 @@ const MobileApp = (() => {
     return true;
   }
 
-  async function removeTrackFromPlaylist(trackId, trackUri) {
-    if (!activePlaylist.id) return;
-    try {
-      await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
-        method: 'DELETE',
-        body: JSON.stringify({
-          tracks: [{ uri: trackUri || `spotify:track:${trackId}` }]
-        })
-      });
+  async function removeTrackFromPlaylist(trackId, trackUri, trackName = '') {
+    if (!trackId) return;
 
-      existingTrackIds.delete(trackId);
-      activePlaylist.tracks = activePlaylist.tracks.filter(t => t.id !== trackId);
-      saveActivePlaylistMeta();
-      updatePlaylistStatsUi();
-      renderDrawerTracks();
-      showToast('Track removed from playlist.', '🗑️');
-    } catch (e) {
-      showToast(`Remove failed: ${e.message}`, '⚠️');
+    // 1. Instantly remove locally from active queue and UI so user is never blocked!
+    const targetTrack = activePlaylist.tracks.find(t => t.id === trackId);
+    const displayName = trackName || targetTrack?.name || 'Song';
+    const effectiveUri = trackUri || targetTrack?.uri;
+
+    existingTrackIds.delete(trackId);
+    activePlaylist.tracks = activePlaylist.tracks.filter(t => t.id !== trackId);
+    saveActivePlaylistMeta();
+    updatePlaylistStatsUi();
+    renderDrawerTracks();
+    renderDesktopQueue();
+    vibrate(25);
+    showToast(`Removed "${displayName}" from playlist.`, '🗑️');
+
+    // 2. Asynchronously attempt removal from Spotify in the background
+    const token = await getValidAccessToken();
+    if (token && activePlaylist.id && effectiveUri && effectiveUri.startsWith('spotify:track:')) {
+      try {
+        await spotifyApi(`/playlists/${activePlaylist.id}/tracks`, {
+          method: 'DELETE',
+          body: JSON.stringify({
+            tracks: [{ uri: effectiveUri }]
+          })
+        });
+      } catch (e) {
+        console.warn('[Spotify] Remote track delete warning:', e.message);
+      }
     }
   }
 
@@ -1739,7 +1785,7 @@ const MobileApp = (() => {
         <button class="track-row-spotify" data-id="${t.id}" title="Play in Spotify">
           <svg viewBox="0 0 24 24" class="spotify-svg-mini"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.792-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.72 1.115.295.18.388.563.208.855zm1.226-2.723c-.226.367-.71.482-1.077.256-2.69-1.653-6.79-2.132-9.972-1.166-.413.125-.85-.11-0.975-.523-.125-.413.11-.85.523-.975 3.633-1.103 8.15-.576 11.245 1.328.368.226.483.71.256 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.282.327z"/></svg>
         </button>
-        <button class="track-row-delete" data-id="${t.id}" data-uri="${t.uri || ''}" title="Remove track">✖</button>
+        <button class="track-row-delete" data-id="${t.id}" data-uri="${t.uri || ''}" data-name="${escapeHtml(t.name)}" title="Remove track">✖</button>
       </div>
     `).join('');
 
@@ -1754,7 +1800,7 @@ const MobileApp = (() => {
     list.querySelectorAll('.track-row-delete').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        removeTrackFromPlaylist(btn.dataset.id, btn.dataset.uri);
+        removeTrackFromPlaylist(btn.dataset.id, btn.dataset.uri, btn.dataset.name);
       });
     });
   }
@@ -1792,7 +1838,7 @@ const MobileApp = (() => {
           <span class="q-artist">${escapeHtml(t.artist)}</span>
         </div>
         <button class="q-spotify-btn" data-id="${t.id}" title="Play on Spotify">▶</button>
-        <button class="q-remove-btn" data-id="${t.id}" title="Remove">✕</button>
+        <button class="q-remove-btn" data-id="${t.id}" data-uri="${t.uri || ''}" data-name="${escapeHtml(t.name)}" title="Remove song">✕</button>
       </div>
     `).join('');
 
@@ -1807,7 +1853,7 @@ const MobileApp = (() => {
     list.querySelectorAll('.q-remove-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        removeTrackFromPlaylist(btn.dataset.id, btn.dataset.uri);
+        removeTrackFromPlaylist(btn.dataset.id, btn.dataset.uri, btn.dataset.name);
       });
     });
   }
@@ -1962,14 +2008,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=1.2.4').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=1.2.5').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v1.2.4 installed! Auto-refreshing...');
-                showToast('App updated to v1.2.4! Refreshing...', '🚀');
+                console.log('[PWA] New version v1.2.5 installed! Auto-refreshing...');
+                showToast('App updated to v1.2.5! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
