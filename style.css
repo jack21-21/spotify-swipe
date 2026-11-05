@@ -2453,10 +2453,12 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 16px;
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
   transition: opacity 0.3s ease, visibility 0.3s ease;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .app-lock-screen.unlocked {
@@ -2468,15 +2470,16 @@ html, body {
 .lock-card {
   width: 100%;
   max-width: 360px;
-  background: rgba(18, 22, 34, 0.85);
+  background: rgba(18, 22, 34, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 28px;
-  padding: 28px 24px 22px 24px;
+  padding: 24px 20px 20px 20px;
   box-shadow: 0 25px 65px rgba(0, 0, 0, 0.85), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+  margin: auto;
 }
 
 .lock-shield-icon {
@@ -2574,6 +2577,9 @@ html, body {
   transition: all 0.15s ease;
   font-family: inherit;
   user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .pin-key:hover, .pin-key:active {
@@ -2663,4 +2669,101 @@ html, body {
   display: flex;
   gap: 8px;
   margin-bottom: 6px;
+}
+
+/* ---------------------------- Responsive Mobile Refinements (Samsung A55 / Phones) ---------------------------- */
+@media (max-width: 480px) {
+  .mobile-header {
+    padding: 0 4px;
+    gap: 4px;
+  }
+  .app-title {
+    font-size: 0.98rem;
+  }
+  .app-version-badge {
+    display: none;
+  }
+  .source-label {
+    display: none;
+  }
+  .source-pill-btn {
+    padding: 6px 9px;
+    gap: 0;
+  }
+  .pl-pill-name {
+    max-width: 88px;
+  }
+  .playlist-pill-btn {
+    padding: 5px 9px;
+  }
+  .header-right {
+    gap: 4px;
+  }
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+  }
+  .action-dock {
+    gap: clamp(5px, 2vw, 10px);
+  }
+}
+
+@media (max-width: 360px) {
+  .pl-pill-name {
+    max-width: 65px;
+  }
+  .pl-pill-count {
+    display: none;
+  }
+  .btn-pass, .btn-like {
+    width: 48px;
+    height: 48px;
+    font-size: 1.25rem;
+  }
+  .btn-preview, .btn-spotify-play {
+    width: 42px;
+    height: 42px;
+  }
+  .btn-undo, .btn-playlist {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (max-height: 720px) {
+  .record-disc {
+    width: 205px;
+    height: 205px;
+  }
+  .vinyl-jacket {
+    width: 185px;
+    height: 185px;
+  }
+  .cd-jewel-case {
+    width: 185px;
+    height: 185px;
+  }
+  .cassette-body {
+    width: 235px;
+    height: 152px;
+  }
+  .frame-border {
+    width: 200px;
+    height: 200px;
+  }
+  .card-track-info {
+    margin-top: 4px;
+    margin-bottom: 4px;
+  }
+  .track-title {
+    font-size: 1.05rem;
+  }
+  .preview-audio-bar {
+    padding: 6px 8px;
+  }
+  .action-dock {
+    padding: 2px 0;
+    margin-top: 2px;
+  }
 }

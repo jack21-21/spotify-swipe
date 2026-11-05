@@ -2710,10 +2710,15 @@ const MobileApp = (() => {
       window.crypto.getRandomValues(challenge);
       const userId = new Uint8Array([1, 8, 6, 2]);
 
+      const rpConfig = {
+        name: 'Spotify Swipe',
+        ...(window.location.hostname ? { id: window.location.hostname } : {})
+      };
+
       const credential = await navigator.credentials.create({
         publicKey: {
           challenge: challenge,
-          rp: { name: 'Spotify Swipe', id: window.location.hostname },
+          rp: rpConfig,
           user: {
             id: userId,
             name: 'jack',
@@ -2737,15 +2742,18 @@ const MobileApp = (() => {
         const credId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
         localStorage.setItem('swipe_passkey_enrolled', 'true');
         localStorage.setItem('swipe_passkey_id', credId);
-        showToast('Fingerprint passkey enrolled successfully! 🖐️', '✅');
+        showToast('Fingerprint enrolled! Unlocking app... 🖐️', '✅');
         const bioBox = $('#mobile-biometric-box');
         if (bioBox) bioBox.style.display = 'flex';
         const enrollBtn = $('#btn-biometric-enroll');
         if (enrollBtn) enrollBtn.textContent = 'Re-enroll Fingerprint Passkey';
+        setTimeout(() => {
+          unlockApp();
+        }, 500);
       }
     } catch (err) {
       console.warn('[Passkey registration]', err);
-      showToast(`Passkey registration: ${err.message || 'Cancelled'}`, '⚠️');
+      showToast(`Passkey setup: ${err.message || 'Cancelled'}`, '⚠️');
     }
   }
 
@@ -2757,6 +2765,11 @@ const MobileApp = (() => {
     }
     if (!window.PublicKeyCredential) {
       showToast('WebAuthn / Passkeys not supported on this browser', '⚠️');
+      return;
+    }
+    const hasEnrolled = localStorage.getItem('swipe_passkey_enrolled') === 'true';
+    if (!hasEnrolled) {
+      showToast('Please tap "Set Up Fingerprint Passkey" to register first!', 'ℹ️');
       return;
     }
     try {
@@ -2773,7 +2786,7 @@ const MobileApp = (() => {
       const assertion = await navigator.credentials.get({
         publicKey: {
           challenge: challenge,
-          rpId: window.location.hostname,
+          ...(window.location.hostname ? { rpId: window.location.hostname } : {}),
           userVerification: 'required',
           allowCredentials: allowCredentials.length > 0 ? allowCredentials : undefined,
           timeout: 60000
