@@ -1607,14 +1607,14 @@ const MobileApp = (() => {
     AudioManager.setVolume(savedVol);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=1.2.0').then(reg => {
+      navigator.serviceWorker.register('./sw.js?v=1.2.1').then(reg => {
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New version v1.2.0 installed! Auto-refreshing...');
-                showToast('App updated to v1.2.0! Refreshing...', '🚀');
+                console.log('[PWA] New version v1.2.1 installed! Auto-refreshing...');
+                showToast('App updated to v1.2.1! Refreshing...', '🚀');
                 setTimeout(() => window.location.reload(), 1000);
               }
             };
